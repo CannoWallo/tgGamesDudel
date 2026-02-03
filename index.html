@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Doodle Game HUD Update</title>
+    <title>Doodle Game Biicla Edition</title>
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <style>
         body { margin: 0; padding: 0; background: #111; overflow: hidden; touch-action: none; font-family: 'Arial', sans-serif; user-select: none; -webkit-user-select: none; display: flex; justify-content: center; align-items: center; height: 100vh; }
@@ -18,11 +18,34 @@ const c = document.getElementById('c'), ctx = c.getContext('2d');
 const W = 360, H = 640; 
 let G = 0.6, JUMP = -15, SPRING = -30, ROCKET = -20;
 
+// --- НАСТРОЙКА ТВОИХ ТРЕКОВ ---
+const audio = {
+    menu: new Audio('menu.mp3'),
+    game: new Audio('game.mp3')
+};
+audio.menu.loop = true;
+audio.game.loop = true;
+
+function playMusic(type) {
+    if (type === 'menu') {
+        audio.game.pause();
+        audio.menu.currentTime = 0;
+        audio.menu.play().catch(e => console.log("Нужен клик для музыки"));
+    } else if (type === 'game') {
+        audio.menu.pause();
+        audio.game.currentTime = 0;
+        audio.game.play().catch(e => console.log("Нужен клик для музыки"));
+    } else {
+        audio.menu.pause();
+        audio.game.pause();
+    }
+}
+
 const imgs = {}, files = ["liza.webp", "nika.webp", "tvorch.webp", "egor.webp", "bg.jpg", "burn.webp", "igla.webp", "hot.webp"];
 let loaded = 0;
 files.forEach(f => { let i = new Image(); i.src = f; i.onload = () => loaded++; imgs[f] = i; });
 
-let state = "MENU", score = 0, high = localStorage.getItem('d_high_simple') || 0, charIdx = 0;
+let state = "MENU", score = 0, high = localStorage.getItem('d_high_v3') || 0, charIdx = 0;
 let plats = [], bullets = [], enemies = [], boosters = [];
 const p = { x: W/2, y: H-150, vx: 0, vy: 0, ang: 0, rocket: 0 }; 
 let input = { down: false, currX: W/2 };
@@ -75,14 +98,25 @@ c.onpointerdown = e => {
     
     input.down = true; input.currX = pos.x;
 
+    // Включаем музыку при первом взаимодействии
+    if (state === "MENU" && audio.menu.paused) playMusic('menu');
+
     if(state === "PLAYING" && p.rocket <= 0) bullets.push({x: p.x, y: p.y-40});
+    
     if(state === "MENU") {
-        if(gameY > H * 0.7) { reset(); state = "PLAYING"; }
-        else charIdx = (charIdx + 1) % 4;
+        if(gameY > H * 0.7) { 
+            reset(); state = "PLAYING"; 
+            playMusic('game'); 
+        } else charIdx = (charIdx + 1) % 4;
     }
-    if(state === "GAMEOVER") {
-        if(gameY > H/2 && gameY < H/2 + 60) { reset(); state = "PLAYING"; }
-        else if(gameY > H/2 + 60) { state = "MENU"; }
+    else if(state === "GAMEOVER") {
+        if(gameY > H/2 && gameY < H/2 + 60) { 
+            reset(); state = "PLAYING"; 
+            playMusic('game');
+        } else if(gameY > H/2 + 60) { 
+            state = "MENU"; 
+            playMusic('menu');
+        }
     }
 };
 window.onpointermove = e => { if(input.down) input.currX = getX(e); };
@@ -97,7 +131,11 @@ function loop() {
     if(state === "PLAYING") {
         let dx = input.currX - p.x;
         if(dx > W/2) dx -= W; else if(dx < -W/2) dx += W;
-        p.vx += (dx * 0.12 - p.vx) * 0.2;
+        
+        // Повышенная чувствительность для сенсора
+        let sensitivity = 1.8;
+        p.vx += (dx * 0.25 * sensitivity - p.vx) * 0.15;
+        
         p.x += p.vx;
         if(p.x > W) p.x -= W; else if(p.x < 0) p.x += W;
 
@@ -111,14 +149,7 @@ function loop() {
         plats.forEach(pl => {
             pl.y += shift;
             if(pl.type===1) { pl.x += pl.sp * speedMult; if(pl.x<0 || pl.x>W-pl.w) pl.sp*=-1; }
-            
-            // Начисление очков за ПРОЛЕТ платформы (снизу вверх)
-            if(!pl.scored && p.y < pl.y) {
-                score += 2;
-                pl.scored = true;
-            }
-
-            // Коллизия
+            if(!pl.scored && p.y < pl.y) { score += 2; pl.scored = true; }
             if(p.vy>0 && pl.active && p.x+25>pl.x && p.x-25<pl.x+pl.w && p.y+40>pl.y && p.y+40<pl.y+pl.h) {
                 p.vy = pl.spring ? SPRING : JUMP;
                 if(pl.type===2) pl.active = false;
@@ -133,10 +164,13 @@ function loop() {
             bullets.forEach((bu,bi) => { if(Math.hypot(bu.x-e.x, bu.y-e.y)<40) { enemies.splice(i,1); bullets.splice(bi,1); score += 4; }});
         });
 
-        if(score > high) { high = score; localStorage.setItem('d_high_simple', high); }
+        if(score > high) { high = score; localStorage.setItem('d_high_v3', high); }
         while(plats.length < 12) spawn(Math.min(...plats.map(o=>o.y)) - 90);
         plats = plats.filter(pl => pl.y < H + 50);
-        if(p.y > H + 100) state = "GAMEOVER";
+        if(p.y > H + 100) { 
+            state = "GAMEOVER"; 
+            playMusic('stop'); // Останавливаем при смерти
+        }
     }
 
     ctx.drawImage(imgs["bg.jpg"], 0, 0, W, H);
@@ -161,16 +195,13 @@ function loop() {
         bullets.forEach(b => drawSprite("igla.webp", b.x, b.y, 35));
         drawSprite(files[charIdx], p.x, p.y, 85, p.ang, p.vx < 0);
         
-        // --- ЧЕРНАЯ ПАНЕЛЬ (HUD) ---
-        ctx.fillStyle = "rgba(0,0,0,0.7)";
-        ctx.fillRect(0, 0, W, 50);
+        // HUD
+        ctx.fillStyle = "rgba(0,0,0,0.8)"; ctx.fillRect(0, 0, W, 50);
         ctx.fillStyle = "#fff"; ctx.font = "bold 14px Arial"; ctx.textAlign="left";
         ctx.fillText("СЧЕТ: " + score, 15, 30);
-        ctx.textAlign="center";
-        ctx.fillStyle = "#FFD700";
+        ctx.textAlign="center"; ctx.fillStyle = "#FFD700";
         ctx.fillText("МНОЖИТЕЛЬ: X" + speedMult.toFixed(2), W/2, 30);
-        ctx.textAlign="right";
-        ctx.fillStyle = "#fff";
+        ctx.textAlign="right"; ctx.fillStyle = "#fff";
         ctx.fillText("РЕКОРД: " + high, W - 15, 30);
 
         if(state === "GAMEOVER") {
