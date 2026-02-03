@@ -3,326 +3,189 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Doodle Game Fixed</title>
+    <title>Doodle Game HUD Update</title>
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <style>
-        body { 
-            margin: 0; 
-            padding: 0; 
-            background: #222; /* Темный фон для ПК версии */
-            overflow: hidden; 
-            touch-action: none; 
-            font-family: Arial, sans-serif; 
-            user-select: none; 
-            -webkit-user-select: none;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            height: 100vh;
-        }
-        canvas { 
-            display: block; 
-            box-shadow: 0 0 20px rgba(0,0,0,0.5); /* Тень для красоты на ПК */
-            /* Эти стили держат пропорции 9:16 */
-            max-width: 100%;
-            max-height: 100%;
-            aspect-ratio: 9/16; 
-        }
+        body { margin: 0; padding: 0; background: #111; overflow: hidden; touch-action: none; font-family: 'Arial', sans-serif; user-select: none; -webkit-user-select: none; display: flex; justify-content: center; align-items: center; height: 100vh; }
+        canvas { display: block; box-shadow: 0 0 30px rgba(0,0,0,0.7); max-width: 100%; max-height: 100%; aspect-ratio: 9/16; background: #fff; }
     </style>
 </head>
 <body>
 <canvas id="c"></canvas>
 <script>
-const tg = window.Telegram.WebApp; 
-tg.expand();
-tg.enableClosingConfirmation();
+const tg = window.Telegram.WebApp; tg.expand();
+const c = document.getElementById('c'), ctx = c.getContext('2d');
+const W = 360, H = 640; 
+let G = 0.6, JUMP = -15, SPRING = -30, ROCKET = -20;
 
-const c = document.getElementById('c');
-const ctx = c.getContext('2d');
-
-// --- ГЛАВНЫЕ НАСТРОЙКИ (ЛОГИЧЕСКОЕ РАЗРЕШЕНИЕ) ---
-const W = 360; 
-const H = 640; 
-const G = 0.6, JUMP = -15, SPRING = -30, ROCKET = -20, ROCKET_TIME = 30;
-
-// --- УМНЫЙ РЕСАЙЗ ---
-function resize() {
-    // Вычисляем максимально возможный размер с сохранением пропорций
-    const winW = window.innerWidth;
-    const winH = window.innerHeight;
-    const scale = Math.min(winW / W, winH / H);
-    
-    // Фактический размер канваса в пикселях CSS
-    const cssW = Math.floor(W * scale);
-    const cssH = Math.floor(H * scale);
-    
-    c.style.width = cssW + "px";
-    c.style.height = cssH + "px";
-
-    // Внутреннее разрешение (умножаем на DPR для четкости)
-    const dpr = window.devicePixelRatio || 1;
-    c.width = W * dpr;
-    c.height = H * dpr;
-    
-    // Масштабируем контекст, чтобы рисовать в координатах 0..360
-    ctx.scale(dpr, dpr);
-}
-window.addEventListener('resize', resize);
-resize();
-
-// --- ЗАГРУЗКА ---
 const imgs = {}, files = ["liza.webp", "nika.webp", "tvorch.webp", "egor.webp", "bg.jpg", "burn.webp", "igla.webp", "hot.webp"];
 let loaded = 0;
-files.forEach(f => {
-    let i = new Image(); i.src = f;
-    i.onload = () => { loaded++; }; // Просто считаем, отрисовка начнется в цикле
-    imgs[f] = i;
-});
+files.forEach(f => { let i = new Image(); i.src = f; i.onload = () => loaded++; imgs[f] = i; });
 
-// --- STATE ---
-let state = "MENU", score = 0, high = 0, charIdx = 0, speed = 1;
+let state = "MENU", score = 0, high = localStorage.getItem('d_high_simple') || 0, charIdx = 0;
 let plats = [], bullets = [], enemies = [], boosters = [];
 const p = { x: W/2, y: H-150, vx: 0, vy: 0, ang: 0, rocket: 0 }; 
-let input = { down: false, startX: 0, swipe: false };
+let input = { down: false, currX: W/2 };
 
-// --- ФУНКЦИЯ ОТРИСОВКИ СПРАЙТА (ПРОПОРЦИИ) ---
-function drawSprite(name, x, y, h_target, rot=0, flip=false) {
-    if(!imgs[name] || !imgs[name].complete) return;
-    let img = imgs[name];
-    let ratio = img.width / img.height;
-    let w_target = h_target * ratio; 
-    
-    ctx.save();
-    ctx.translate(x, y);
-    ctx.rotate(rot);
-    if(flip) ctx.scale(-1, 1);
-    ctx.drawImage(img, -w_target/2, -h_target/2, w_target, h_target);
-    ctx.restore();
+function resize() {
+    const scale = Math.min(window.innerWidth / W, window.innerHeight / H);
+    c.style.width = Math.floor(W * scale) + "px"; c.style.height = Math.floor(H * scale) + "px";
+    const dpr = window.devicePixelRatio || 1;
+    c.width = W * dpr; c.height = H * dpr; ctx.scale(dpr, dpr);
 }
+window.addEventListener('resize', resize); resize();
 
-function reset() {
-    p.x = W/2; p.y = H-150; p.vx = 0; p.vy = 0; p.ang = 0; p.rocket = 0;
-    score = 0; speed = 1; plats = []; enemies = []; bullets = []; boosters = [];
-    plats.push({x: W/2-60, y: H-50, w: 120, h:18, type: 0, active:true}); 
-    for(let i=1; i<10; i++) spawn(H - i*100);
+function drawSprite(name, x, y, h, rot=0, flip=false) {
+    if(!imgs[name]?.complete) return;
+    let img = imgs[name], w = h * (img.width / img.height); 
+    ctx.save(); ctx.translate(x, y); ctx.rotate(rot);
+    if(flip) ctx.scale(-1, 1);
+    ctx.drawImage(img, -w/2, -h/2, w, h); ctx.restore();
 }
 
 function spawn(y) {
     let r = Math.random(), type = r>0.9 ? 2 : (r>0.8 ? 1 : 0); 
-    let pl = {x: Math.random()*(W-80), y: y, w: 75, h: 18, type: type, active: true, sp: Math.random()>.5?2:-2};
+    let pl = {x: Math.random()*(W-90)+5, y: y, w: 85, h: 22, type: type, active: true, sp: 2.5, scored: false};
     if(type === 0) {
         let rb = Math.random();
-        pl.spring = rb > 0.92;
-        pl.booster = (!pl.spring && rb > 0.88);
+        if(rb > 0.93) pl.spring = true;
+        else if(rb > 0.90) boosters.push({x: pl.x+42, y: y-25});
     }
     plats.push(pl);
-    if(pl.booster) boosters.push({x: pl.x+37, y: pl.y-25});
-    if(Math.random() > 0.96) enemies.push({x: Math.random()*W, y: y-50, off: Math.random()*6});
+    if(Math.random() > 0.97) enemies.push({x: Math.random()*W, y: y-50, off: Math.random()*5});
 }
 
-// --- НОВАЯ СИСТЕМА УПРАВЛЕНИЯ (ИСПРАВЛЕННАЯ) ---
-function getPos(e) {
+function reset() {
+    p.x = W/2; p.y = H-150; p.vx = 0; p.vy = 0; p.ang = 0; p.rocket = 0;
+    score = 0; plats = []; enemies = []; bullets = []; boosters = [];
+    plats.push({x: W/2-60, y: H-50, w: 120, h:25, type: 0, active:true, scored: true}); 
+    for(let i=1; i<10; i++) spawn(H - i*100);
+}
+
+function getX(e) {
     const rect = c.getBoundingClientRect();
-    // Математический перевод координат экрана в координаты игры (0..360)
-    return {
-        x: (e.clientX - rect.left) / rect.width * W,
-        y: (e.clientY - rect.top) / rect.height * H
-    };
+    const cx = e.touches ? e.touches[0].clientX : e.clientX;
+    return (cx - rect.left) / rect.width * W;
 }
 
-const handleStart = (e) => {
-    const touch = e.touches ? e.touches[0] : e;
-    const pos = getPos(touch);
+c.onpointerdown = e => {
+    const rect = c.getBoundingClientRect();
+    const pos = {x: getX(e), y: (e.touches?e.touches[0].clientY:e.clientY) - rect.top};
+    const gameY = pos.y / rect.height * H;
     
-    input.down = true; 
-    input.startX = pos.x; 
-    input.currX = pos.x;
-    input.swipe = true;
-    
-    // Кнопка выстрела (в игре)
-    if(state === "PLAYING" && Math.hypot(pos.x - W/2, pos.y - (H-55)) < 45 && p.rocket <= 0) {
-        bullets.push({x: p.x, y: p.y-40});
+    input.down = true; input.currX = pos.x;
+
+    if(state === "PLAYING" && p.rocket <= 0) bullets.push({x: p.x, y: p.y-40});
+    if(state === "MENU") {
+        if(gameY > H * 0.7) { reset(); state = "PLAYING"; }
+        else charIdx = (charIdx + 1) % 4;
+    }
+    if(state === "GAMEOVER") {
+        if(gameY > H/2 && gameY < H/2 + 60) { reset(); state = "PLAYING"; }
+        else if(gameY > H/2 + 60) { state = "MENU"; }
     }
 };
+window.onpointermove = e => { if(input.down) input.currX = getX(e); };
+window.onpointerup = () => input.down = false;
 
-const handleMove = (e) => {
-    const touch = e.touches ? e.touches[0] : e;
-    const pos = getPos(touch);
-    input.currX = pos.x;
-};
-
-const handleEnd = (e) => {
-    input.down = false;
-    const touch = e.changedTouches ? e.changedTouches[0] : e;
-    const pos = getPos(touch);
-    let diff = input.currX - input.startX;
-
-    if (state === "MENU") {
-        if (input.swipe && Math.abs(diff) > 30) { 
-            // Свайп выбора
-            charIdx = (charIdx + (diff < 0 ? 1 : -1) + 4) % 4;
-        } else {
-            // Клик по кнопке ИГРАТЬ (зона расширена)
-            // Кнопка рисуется на H-100, высота 55. Проверяем зону:
-            if (pos.y > H - 130 && pos.y < H - 20 && Math.abs(pos.x - W/2) < 120) {
-                reset(); 
-                state = "PLAYING";
-            }
-        }
-    } else if (state === "GAMEOVER") {
-         // Верхняя кнопка (Рестарт)
-         if (pos.y > H/2 && pos.y < H/2 + 60) {
-             reset(); state = "PLAYING";
-         }
-         // Нижняя кнопка (Меню)
-         else if (pos.y > H/2 + 60 && pos.y < H/2 + 120) {
-             state = "MENU";
-         }
-    }
-    input.swipe = false;
-};
-
-// Слушатели (поддерживают и мышь и тач)
-c.addEventListener('mousedown', handleStart);
-c.addEventListener('mousemove', handleMove);
-c.addEventListener('mouseup', handleEnd);
-c.addEventListener('touchstart', handleStart, {passive: false});
-c.addEventListener('touchmove', (e) => { e.preventDefault(); handleMove(e); }, {passive: false});
-c.addEventListener('touchend', handleEnd);
-
-
-// --- ИГРОВОЙ ЦИКЛ ---
 function loop() {
     requestAnimationFrame(loop);
-    if(loaded < 8) { // Прелоадер
-        ctx.fillStyle = "#000"; ctx.fillRect(0,0,W,H);
-        ctx.fillStyle = "#fff"; ctx.font="20px Arial"; ctx.textAlign="center";
-        ctx.fillText("ЗАГРУЗКА...", W/2, H/2);
-        return;
-    }
+    if(loaded < 8) return;
 
-    // ЛОГИКА
+    let speedMult = 1 + (Math.floor(score / 70) * 0.25);
+
     if(state === "PLAYING") {
-        speed = 1.0 + Math.floor(score/700)*0.2;
-        
-        // Движение
-        if(input.down) {
-            let dx = input.currX - p.x;
-            if(dx > W/2) dx -= W; else if(dx < -W/2) dx += W;
-            if(Math.abs(dx) > 5) p.vx += (dx>0 ? 0.7 : -0.7);
-        }
-        p.vx *= 0.9;
+        let dx = input.currX - p.x;
+        if(dx > W/2) dx -= W; else if(dx < -W/2) dx += W;
+        p.vx += (dx * 0.12 - p.vx) * 0.2;
         p.x += p.vx;
         if(p.x > W) p.x -= W; else if(p.x < 0) p.x += W;
 
-        // Физика Y
-        if(p.rocket > ROCKET_TIME) { 
-            p.vy = ROCKET; p.rocket--; p.ang += 0.25;
-        } else if(p.rocket > 0) { 
-            p.vy += 0.55; p.rocket--; p.ang *= 0.9;
-        } else { 
-            p.vy += G * speed;
-            p.ang += ((-p.vx*3 * (Math.PI/180)) - p.ang) * 0.1;
-        }
+        if(p.rocket > 0) { p.vy = ROCKET; p.rocket--; p.ang += 0.3; } 
+        else { p.vy += G * speedMult; p.ang *= 0.85; p.ang += (p.vx * 0.05 - p.ang) * 0.1; }
         p.y += p.vy;
 
-        // Камера
         let shift = 0;
-        if(p.y < H/2) { shift = (H/2 - p.y) * 0.15; p.y += shift; score += shift; }
+        if(p.y < H/2) { shift = H/2 - p.y; p.y = H/2; }
 
-        // Платформы
         plats.forEach(pl => {
             pl.y += shift;
-            if(pl.type===1) { pl.x += pl.sp*speed; if(pl.x<0 || pl.x>W-pl.w) pl.sp*=-1; }
-            if(p.vy>0 && pl.active && p.x+20>pl.x && p.x-20<pl.x+pl.w && p.y+40>pl.y && p.y+40<pl.y+pl.h+20) {
-                p.vy = (pl.spring ? SPRING : JUMP) * Math.pow(speed, 0.3);
+            if(pl.type===1) { pl.x += pl.sp * speedMult; if(pl.x<0 || pl.x>W-pl.w) pl.sp*=-1; }
+            
+            // Начисление очков за ПРОЛЕТ платформы (снизу вверх)
+            if(!pl.scored && p.y < pl.y) {
+                score += 2;
+                pl.scored = true;
+            }
+
+            // Коллизия
+            if(p.vy>0 && pl.active && p.x+25>pl.x && p.x-25<pl.x+pl.w && p.y+40>pl.y && p.y+40<pl.y+pl.h) {
+                p.vy = pl.spring ? SPRING : JUMP;
                 if(pl.type===2) pl.active = false;
-                tg.HapticFeedback.impactOccurred('medium');
+                tg.HapticFeedback.impactOccurred('light');
             }
         });
         
-        // Объекты
-        boosters.forEach((b,i) => { 
-            b.y += shift; 
-            if(Math.hypot(p.x-b.x, p.y-b.y) < 40) { p.rocket = 130; boosters.splice(i,1); tg.HapticFeedback.notificationOccurred('success');}
-        });
-        bullets.forEach((b,i) => { b.y -= 22; if(b.y<0) bullets.splice(i,1); });
+        boosters.forEach((b,i) => { b.y += shift; if(Math.hypot(p.x-b.x, p.y-b.y) < 40) { p.rocket = 80; boosters.splice(i,1); }});
+        bullets.forEach((b,i) => { b.y -= 18; if(b.y < -50) bullets.splice(i,1); });
         enemies.forEach((e,i) => {
-            e.y += shift; e.x += Math.sin(Date.now()*.005 + e.off)*3;
-            if(p.rocket<=0 && Math.hypot(p.x-e.x, p.y-e.y) < 40) { state = "GAMEOVER"; tg.HapticFeedback.notificationOccurred('error'); }
-            bullets.forEach((bu,bi) => { if(Math.hypot(bu.x-e.x, bu.y-e.y)<40) { enemies.splice(i,1); bullets.splice(bi,1); }});
+            e.y += shift; if(p.rocket<=0 && Math.hypot(p.x-e.x, p.y-e.y) < 40) state = "GAMEOVER";
+            bullets.forEach((bu,bi) => { if(Math.hypot(bu.x-e.x, bu.y-e.y)<40) { enemies.splice(i,1); bullets.splice(bi,1); score += 4; }});
         });
 
-        plats = plats.filter(pl => pl.y < H);
-        while(plats.length < 10) spawn(Math.min(...plats.map(o=>o.y)) - 100);
-        if(p.y > H) state = "GAMEOVER";
+        if(score > high) { high = score; localStorage.setItem('d_high_simple', high); }
+        while(plats.length < 12) spawn(Math.min(...plats.map(o=>o.y)) - 90);
+        plats = plats.filter(pl => pl.y < H + 50);
+        if(p.y > H + 100) state = "GAMEOVER";
     }
 
-    // ОТРИСОВКА
-    if(imgs["bg.jpg"]) ctx.drawImage(imgs["bg.jpg"], 0, 0, W, H);
-    else { ctx.fillStyle="#d2e6fa"; ctx.fillRect(0,0,W,H); }
+    ctx.drawImage(imgs["bg.jpg"], 0, 0, W, H);
 
     if(state === "MENU") {
-        ctx.fillStyle = "#00008b"; ctx.font = "bold 36px Arial"; ctx.textAlign = "center";
-        ctx.fillText("ВЫБЕРИ ГЕРОЯ", W/2, 80);
-        
-        let t = Date.now()*0.004, pulse = 1 + Math.sin(t)*0.03, bob = Math.sin(t*0.8)*10;
-        let name = files[charIdx].split('.')[0].toUpperCase();
-        
-        drawSprite(files[charIdx], W/2, 180+bob+140, 280*pulse); 
-        
-        ctx.fillStyle = "#fff"; ctx.beginPath(); ctx.roundRect(W/2-100, 460+bob, 200, 45, 12); ctx.fill();
-        ctx.fillStyle = "#00008b"; ctx.font = "bold 28px Arial"; ctx.fillText(name, W/2, 492+bob);
-        
-        // Кнопка ИГРАТЬ
-        ctx.fillStyle = "#00008b"; ctx.beginPath(); ctx.roundRect(W/2-100, H-100, 200, 55, 18); ctx.fill();
-        ctx.fillStyle = "#fff"; ctx.font = "bold 24px Arial"; ctx.fillText("ИГРАТЬ", W/2, H-65);
-    } 
-    else if(state === "PLAYING" || state === "GAMEOVER") {
+        let bob = Math.sin(Date.now() * 0.003) * 15;
+        ctx.fillStyle = "#fff"; ctx.font = "bold 30px Arial"; ctx.textAlign = "center";
+        ctx.fillText("ВЫБЕРИ ГЕРОЯ", W/2, 100);
+        drawSprite(files[charIdx], W/2, H/2 + bob, 220);
+        ctx.fillStyle = "#fff"; ctx.beginPath(); ctx.roundRect(W/2-80, H-100, 160, 50, 25); ctx.fill();
+        ctx.fillStyle = "#000"; ctx.font = "bold 20px Arial"; ctx.fillText("ИГРАТЬ", W/2, H-68);
+    } else {
         plats.forEach(pl => {
             if(!pl.active) return;
-            ctx.fillStyle = "#000"; ctx.beginPath(); ctx.roundRect(pl.x, pl.y, pl.w, pl.h, 10); ctx.fill();
-            ctx.fillStyle = pl.type==1?"#ff0":pl.type==2?"#f33":"#fff"; 
-            ctx.beginPath(); ctx.roundRect(pl.x+2, pl.y+2, pl.w-4, pl.h-4, 8); ctx.fill();
-            
-            if(pl.spring) {
-                ctx.fillStyle="#000"; ctx.fillRect(pl.x+pl.w/2-12, pl.y-10, 24, 10);
-                ctx.fillStyle="#0cf"; ctx.fillRect(pl.x+pl.w/2-10, pl.y-8, 20, 6);
-            }
+            ctx.strokeStyle = "#000"; ctx.lineWidth = 3;
+            ctx.fillStyle = pl.type==1?"#FFD700":pl.type==2?"#FF3B30":"#FFFFFF"; 
+            ctx.beginPath(); ctx.roundRect(pl.x, pl.y, pl.w, pl.h, 12); ctx.fill(); ctx.stroke();
+            if(pl.spring) { ctx.fillStyle="#555"; ctx.fillRect(pl.x+pl.w/2-8, pl.y-6, 16, 6); }
         });
-
         boosters.forEach(b => drawSprite("burn.webp", b.x, b.y, 45));
-        enemies.forEach(e => drawSprite("hot.webp", e.x, e.y, 60));
-        bullets.forEach(b => drawSprite("igla.webp", b.x, b.y, 40));
-
-        if(state === "PLAYING") drawSprite(files[charIdx], p.x, p.y, 80, p.ang, p.vx < -0.1);
-
-        // UI
-        ctx.fillStyle = "rgba(0,0,0,0.3)"; ctx.fillRect(0,0,W,40);
-        ctx.fillStyle = "#fff"; ctx.textAlign="left"; ctx.font="bold 18px Arial"; 
-        ctx.fillText("СЧЕТ: "+Math.floor(score/10), 15, 26);
+        enemies.forEach(e => drawSprite("hot.webp", e.x, e.y, 65));
+        bullets.forEach(b => drawSprite("igla.webp", b.x, b.y, 35));
+        drawSprite(files[charIdx], p.x, p.y, 85, p.ang, p.vx < 0);
         
-        // Кнопка стрельбы
-        ctx.fillStyle = "gold"; ctx.beginPath(); ctx.arc(W/2, H-55, 35, 0, 7); ctx.fill();
-        ctx.lineWidth=3; ctx.strokeStyle="#000"; ctx.stroke();
+        // --- ЧЕРНАЯ ПАНЕЛЬ (HUD) ---
+        ctx.fillStyle = "rgba(0,0,0,0.7)";
+        ctx.fillRect(0, 0, W, 50);
+        ctx.fillStyle = "#fff"; ctx.font = "bold 14px Arial"; ctx.textAlign="left";
+        ctx.fillText("СЧЕТ: " + score, 15, 30);
+        ctx.textAlign="center";
+        ctx.fillStyle = "#FFD700";
+        ctx.fillText("МНОЖИТЕЛЬ: X" + speedMult.toFixed(2), W/2, 30);
+        ctx.textAlign="right";
+        ctx.fillStyle = "#fff";
+        ctx.fillText("РЕКОРД: " + high, W - 15, 30);
 
         if(state === "GAMEOVER") {
             ctx.fillStyle = "rgba(0,0,0,0.85)"; ctx.fillRect(0,0,W,H);
-            ctx.fillStyle = "red"; ctx.textAlign="center"; ctx.font="bold 40px Arial";
-            ctx.fillText("КОНЕЦ ИГРЫ", W/2, H/2-100);
-            
-            // Кнопка ЕЩЕ РАЗ
-            ctx.fillStyle = "#fff"; ctx.beginPath(); ctx.roundRect(W/2-85, H/2+20, 170, 45, 10); ctx.fill();
-            ctx.fillStyle = "#000"; ctx.font="bold 18px Arial"; ctx.fillText("ЕЩЕ РАЗ", W/2, H/2+48);
-
-            // Кнопка В МЕНЮ
-            ctx.fillStyle = "#00008b"; ctx.beginPath(); ctx.roundRect(W/2-85, H/2+80, 170, 45, 10); ctx.fill();
-            ctx.fillStyle = "#fff"; ctx.fillText("В МЕНЮ", W/2, H/2+108);
+            ctx.fillStyle = "#fff"; ctx.textAlign="center";
+            ctx.font = "bold 32px Arial"; ctx.fillText("КОНЕЦ ИГРЫ", W/2, H/2 - 60);
+            ctx.font = "bold 24px Arial"; ctx.fillText("СЧЕТ: " + score, W/2, H/2 - 15);
+            ctx.fillStyle = "#fff"; ctx.beginPath(); ctx.roundRect(W/2-90, H/2+20, 180, 45, 15); ctx.fill();
+            ctx.fillStyle = "#000"; ctx.font = "bold 18px Arial"; ctx.fillText("ЕЩЕ РАЗ", W/2, H/2+48);
+            ctx.fillStyle = "#444"; ctx.beginPath(); ctx.roundRect(W/2-90, H/2+75, 180, 45, 15); ctx.fill();
+            ctx.fillStyle = "#fff"; ctx.fillText("В МЕНЮ", W/2, H/2+103);
         }
     }
 }
 loop();
 </script>
 </body>
-
 </html>
