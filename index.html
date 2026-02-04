@@ -2,278 +2,315 @@
 <html lang="ru">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>Doodle Game PRO Fixed</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Biicla Jump: Ultimate</title>
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <style>
-        body { margin: 0; padding: 0; background: #000; overflow: hidden; touch-action: none; font-family: 'Segoe UI', Roboto, sans-serif; user-select: none; -webkit-user-select: none; display: flex; justify-content: center; align-items: center; height: 100vh; width: 100vw; color: white; }
+        :root { --red: #ff1a1a; --bg-card: rgba(255, 255, 255, 0.98); --gray: #f2f2f7; }
+        body { margin: 0; padding: 0; background: #111; overflow: hidden; touch-action: none; font-family: -apple-system, system-ui, sans-serif; user-select: none; -webkit-user-select: none; display: flex; justify-content: center; align-items: center; height: 100vh; }
+        #game-container { position: relative; width: 360px; height: 640px; background: #fff; overflow: hidden; box-shadow: 0 0 100px rgba(0,0,0,0.5); }
+        canvas { display: block; width: 100%; height: 100%; }
+
+        /* UI OVERLAY */
+        .overlay { position: absolute; top: 0; left: 0; width: 100%; height: 100%; display: none; z-index: 100; background: rgba(0,0,0,0.4); backdrop-filter: blur(2px); }
+        .overlay.active { display: block; }
+        .bottom-sheet { position: absolute; bottom: 0; left: 0; width: 100%; background: var(--bg-card); border-radius: 30px 30px 0 0; transform: translateY(100%); transition: transform 0.4s cubic-bezier(0.16, 1, 0.3, 1); padding: 20px; box-sizing: border-box; }
+        .bottom-sheet.open { transform: translateY(0); }
+        .handle { width: 40px; height: 5px; background: #ddd; border-radius: 3px; margin: 0 auto 20px; }
         
-        canvas { display: block; box-shadow: 0 0 20px rgba(0,0,0,0.5); background: #fff; z-index: 1; }
+        .tabs { display: flex; background: var(--gray); border-radius: 12px; padding: 3px; margin-bottom: 20px; }
+        .tab-btn { flex: 1; border: none; padding: 8px; border-radius: 10px; font-weight: 600; cursor: pointer; background: transparent; }
+        .tab-btn.active { background: #fff; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
+        .content-section { display: none; }
+        .content-section.active { display: block; }
 
-        #ui-layer { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 10; }
+        .ui-item { display: flex; align-items: center; justify-content: space-between; background: var(--gray); padding: 14px; border-radius: 18px; margin-bottom: 10px; }
+        .ui-info { display: flex; align-items: center; gap: 12px; font-weight: 600; }
+        .icon { width: 32px; height: 32px; background: var(--red); border-radius: 8px; display: flex; align-items: center; justify-content: center; color: white; }
 
-        .settings-panel { 
-            position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
-            background: rgba(20,20,20,0.98); padding: 25px; border-radius: 25px;
-            width: 280px; display: none; border: 2px solid #444;
-            box-shadow: 0 0 50px rgba(0,0,0,1); text-align: center;
-            pointer-events: auto;
-        }
-        .settings-panel.active { display: block; }
+        .switch { position: relative; display: inline-block; width: 46px; height: 26px; }
+        .switch input { opacity: 0; width: 0; height: 0; }
+        .slider { position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: #ccc; transition: .3s; border-radius: 34px; }
+        .slider:before { position: absolute; content: ""; height: 20px; width: 20px; left: 3px; bottom: 3px; background-color: white; transition: .3s; border-radius: 50%; }
+        input:checked + .slider { background-color: var(--red); }
+        input:checked + .slider:before { transform: translateX(20px); }
 
-        .setting-item { margin: 20px 0; }
-        input[type="range"] { width: 100%; accent-color: #0088cc; cursor: pointer; }
+        .btn-main { width: 100%; background: var(--red); color: white; border: none; padding: 18px; border-radius: 20px; font-weight: bold; font-size: 18px; cursor: pointer; margin-top: 10px; }
+        .settings-btn { position: absolute; bottom: 20px; right: 20px; width: 50px; height: 50px; background: rgba(255,255,255,0.9); border-radius: 15px; display: flex; align-items: center; justify-content: center; font-size: 24px; border: none; z-index: 50; }
         
-        .close-btn { background: #ff3b30; border: none; color: white; padding: 12px 24px; border-radius: 12px; font-weight: bold; cursor: pointer; width: 100%; }
-
-        .profile-box { 
-            position: absolute; top: 50px; left: 20px; display: flex; 
-            align-items: center; gap: 10px; opacity: 1; 
-        }
-        .profile-img { width: 45px; height: 45px; border-radius: 50%; border: 2px solid #fff; background: #333; object-fit: cover; }
-
-        .settings-icon { 
-            position: absolute; top: 50px; right: 20px; width: 35px; height: 35px; 
-            pointer-events: auto; cursor: pointer; 
-        }
+        .leader-row { display: flex; justify-content: space-between; padding: 12px; border-bottom: 1px solid #eee; }
+        .leader-row.me { color: var(--red); font-weight: 800; }
     </style>
 </head>
 <body>
 
-<canvas id="c"></canvas>
+<div id="game-container">
+    <canvas id="c"></canvas>
+    <button class="settings-btn" id="open-ui">⚙️</button>
 
-<div id="ui-layer">
-    <div class="profile-box">
-        <img src="" class="profile-img" id="user-pic" style="display:none">
-        <div id="user-name" style="text-shadow: 2px 2px 4px rgba(0,0,0,0.8); font-weight: bold; font-size: 18px;">Player</div>
-    </div>
-    
-    <img src="https://cdn-icons-png.flaticon.com/512/3524/3524659.png" class="settings-icon" id="open-settings">
-
-    <div class="settings-panel" id="settings">
-        <h2 style="margin-top:0">НАСТРОЙКИ</h2>
-        <div class="setting-item">
-            <label style="display:block; margin-bottom:10px">ГРОМКОСТЬ МУЗЫКИ</label>
-            <input type="range" id="vol-range" min="0" max="1" step="0.1">
+    <div class="overlay" id="ui-overlay">
+        <div class="bottom-sheet" id="ui-sheet">
+            <div class="handle"></div>
+            <div class="tabs">
+                <button class="tab-btn active" data-tab="tab-settings">Настройки</button>
+                <button class="tab-btn" data-tab="tab-leader">Рейтинг</button>
+            </div>
+            <div id="tab-settings" class="content-section active">
+                <div class="ui-item">
+                    <div class="ui-info"><div class="icon">🔊</div>Музыка</div>
+                    <label class="switch"><input type="checkbox" id="set-music" checked><span class="slider"></span></label>
+                </div>
+                <div class="ui-item">
+                    <div class="ui-info"><div class="icon">📳</div>Вибро</div>
+                    <label class="switch"><input type="checkbox" id="set-vibro" checked><span class="slider"></span></label>
+                </div>
+            </div>
+            <div id="tab-leader" class="content-section">
+                <div id="leaderboard-content"></div>
+            </div>
+            <button class="btn-main" id="close-ui">ГОТОВО</button>
         </div>
-        <div class="setting-item">
-            <label style="display:flex; align-items:center; justify-content:center; gap:10px">
-                ВИБРАЦИЯ <input type="checkbox" id="vib-check" style="transform: scale(1.5);">
-            </label>
-        </div>
-        <button class="close-btn" id="close-settings">ЗАКРЫТЬ</button>
     </div>
 </div>
 
 <script>
 const tg = window.Telegram.WebApp;
 tg.expand();
-tg.ready();
-
-// Данные ТГ
-const user = tg.initDataUnsafe?.user;
-if (user) {
-    document.getElementById('user-name').innerText = user.first_name;
-    if (user.photo_url) {
-        const pic = document.getElementById('user-pic');
-        pic.src = user.photo_url;
-        pic.style.display = 'block';
-    }
-}
 
 const c = document.getElementById('c'), ctx = c.getContext('2d');
 const W = 360, H = 640;
-let G = 0.6, JUMP = -15, SPRING = -30, ROCKET = -20;
-let currentScale = 1, offsetLeft = 0, offsetTop = 0;
+let gravity = 0.55, jumpPower = -14, springPower = -28, rocketPower = -22;
 
-// Конфиг
-let config = {
-    volume: parseFloat(localStorage.getItem('dg_vol')) ?? 0.5,
-    vibration: localStorage.getItem('dg_vib') !== 'false'
-};
-document.getElementById('vol-range').value = config.volume;
-document.getElementById('vib-check').checked = config.vibration;
+let state = "MENU", score = 0, high = localStorage.getItem('biicla_high') || 0, charIdx = 0;
+let settings = JSON.parse(localStorage.getItem('biicla_settings')) || { music: true, vibration: true };
 
-const audio = {
-    menu: new Audio('menu.mp3'),
-    game: new Audio('game.mp3')
-};
-audio.menu.loop = true; audio.game.loop = true;
+const imgs = {}, files = ["liza.webp", "nika.webp", "tvorch.webp", "egor.webp", "bg.jpg", "burn.webp", "igla.webp", "hot.webp"];
+let loadedCount = 0;
+files.forEach(f => {
+    let i = new Image(); i.src = f;
+    i.onload = () => loadedCount++;
+    imgs[f] = i;
+});
 
-function updateAudioVolume() {
-    audio.menu.volume = config.volume;
-    audio.game.volume = config.volume;
+const audio = { menu: new Audio('menu.mp3'), game: new Audio('game.mp3') };
+audio.menu.loop = audio.game.loop = true;
+
+// UI LOGIC
+document.querySelectorAll('.tab-btn').forEach(btn => {
+    btn.onclick = () => {
+        document.querySelectorAll('.tab-btn, .content-section').forEach(el => el.classList.remove('active'));
+        btn.classList.add('active');
+        document.getElementById(btn.dataset.tab).classList.add('active');
+        if(btn.dataset.tab === 'tab-leader') updateLeaderboardUI();
+    };
+});
+
+function updateLeaderboardUI() {
+    const container = document.getElementById('leaderboard-content');
+    const mock = [{name: "Biicla", s: 15400}, {name: "Egor", s: 12100}, {name: tg.initDataUnsafe?.user?.first_name || "Ты", s: high, isMe: true}].sort((a,b) => b.s - a.s);
+    container.innerHTML = mock.map((p, i) => `<div class="leader-row ${p.isMe?'me':''}"><span>${i+1}. ${p.name}</span><span>${p.s}</span></div>`).join('');
 }
-updateAudioVolume();
+
+const overlay = document.getElementById('ui-overlay'), sheet = document.getElementById('ui-sheet');
+document.getElementById('open-ui').onclick = () => { overlay.classList.add('active'); setTimeout(() => sheet.classList.add('open'), 10); };
+document.getElementById('close-ui').onclick = () => {
+    sheet.classList.remove('open'); setTimeout(() => overlay.classList.remove('active'), 300);
+    settings.music = document.getElementById('set-music').checked;
+    settings.vibration = document.getElementById('set-vibro').checked;
+    localStorage.setItem('biicla_settings', JSON.stringify(settings));
+    if(!settings.music) { audio.menu.pause(); audio.game.pause(); } else if(state === "MENU") audio.menu.play().catch(()=>{});
+};
+
+// GAME ENGINE
+let plats = [], bullets = [], enemies = [], boosters = [], particles = [];
+const p = { x: W/2, y: H-150, vx: 0, vy: 0, ang: 0, rocket: 0, dir: 1 };
+let input = { currX: W/2, startX: 0 };
 
 function resize() {
-    const winW = window.innerWidth, winH = window.innerHeight;
-    currentScale = Math.min(winW / W, winH / H);
-    c.style.width = Math.floor(W * currentScale) + "px";
-    c.style.height = Math.floor(H * currentScale) + "px";
-    const rect = c.getBoundingClientRect();
-    offsetLeft = rect.left; offsetTop = rect.top;
     const dpr = window.devicePixelRatio || 1;
-    c.width = W * dpr; c.height = H * dpr;
-    ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.scale(dpr, dpr);
+    c.width = W * dpr; c.height = H * dpr; ctx.scale(dpr, dpr);
 }
 window.addEventListener('resize', resize); resize();
 
-const imgs = {}, files = ["liza.webp", "nika.webp", "tvorch.webp", "egor.webp", "bg.jpg", "burn.webp", "igla.webp", "hot.webp"];
-let loaded = 0;
-files.forEach(f => { let i = new Image(); i.src = f; i.onload = () => loaded++; imgs[f] = i; });
-
-let state = "MENU", score = 0, high = localStorage.getItem('d_high_final') || 0, charIdx = 0, isPaused = false;
-let plats = [], bullets = [], enemies = [], boosters = [], particles = [];
-const p = { x: W/2, y: H-150, vx: 0, vy: 0, ang: 0, rocket: 0 }; 
-let input = { down: false, currX: W/2 };
-
-function haptic(type) {
-    if (!config.vibration || !tg.HapticFeedback) return;
-    try {
-        if (type === 'light') tg.HapticFeedback.impactOccurred('light');
-        if (type === 'medium') tg.HapticFeedback.impactOccurred('medium');
-        if (type === 'error') tg.HapticFeedback.notificationOccurred('error');
-    } catch(e) {}
-}
-
-function playMusic(type) {
-    try {
-        if (type === 'menu') { audio.game.pause(); audio.menu.play().catch(()=>{}); }
-        else if (type === 'game') { audio.menu.pause(); audio.game.currentTime = 0; audio.game.play().catch(()=>{}); }
-        else { audio.menu.pause(); audio.game.pause(); }
-    } catch(e) {}
-}
-
 function spawn(y) {
-    let r = Math.random(), type = r>0.9 ? 2 : (r>0.8 ? 1 : 0); 
-    let pl = {x: Math.random()*(W-90)+5, y: y, w: 85, h: 22, type: type, active: true, sp: 2.5, scored: false};
-    if(type === 0 && Math.random() > 0.93) pl.spring = true;
+    let r = Math.random(), type = r > 0.9 ? 2 : (r > 0.8 ? 1 : 0);
+    let pl = { x: Math.random()*(W-80)+10, y: y, w: 75, h: 18, type: type, active: true, sp: 2, scored: false };
+    if(type === 0) {
+        if(Math.random() > 0.93) pl.spring = true;
+        else if(Math.random() > 0.97) boosters.push({ x: pl.x+37, y: y-25 });
+    }
     plats.push(pl);
-    if(Math.random() > 0.97) enemies.push({x: Math.random()*W, y: y-50});
+    if(Math.random() > 0.97) enemies.push({ x: Math.random()*(W-40)+20, y: y-50, t: Math.random()*5, ang: 0, angVel: 0 });
 }
 
 function reset() {
-    p.x = W/2; p.y = H-150; p.vx = 0; p.vy = JUMP; // Даем прыжок при старте!
-    p.ang = 0; p.rocket = 0;
+    p.x = W/2; p.y = H-150; p.vx = 0; p.vy = 0; p.rocket = 0;
     score = 0; plats = []; enemies = []; bullets = []; boosters = []; particles = [];
-    plats.push({x: W/2-60, y: H-50, w: 120, h:25, type: 0, active:true, scored: true}); 
-    for(let i=1; i<10; i++) spawn(H - i*100);
+    plats.push({x: W/2-50, y: H-50, w: 100, h:20, type: 0, active:true, scored: true});
+    for(let i=1; i<12; i++) spawn(H - i*75);
 }
 
-function getGameCoords(e) {
-    const cx = e.touches ? e.touches[0].clientX : e.clientX;
-    const cy = e.touches ? e.touches[0].clientY : e.clientY;
-    return { x: (cx - offsetLeft) / currentScale, y: (cy - offsetTop) / currentScale };
+function switchTrack(to) {
+    if(!settings.music) return;
+    if(to === 'game') { audio.menu.pause(); audio.game.currentTime = 0; audio.game.play().catch(()=>{}); }
+    else if(to === 'menu') { audio.game.pause(); audio.menu.currentTime = 0; audio.menu.play().catch(()=>{}); }
+    else { audio.menu.pause(); audio.game.pause(); }
 }
-
-// Настройки UI события
-document.getElementById('open-settings').onclick = (e) => { e.stopPropagation(); isPaused = true; document.getElementById('settings').classList.add('active'); haptic('light'); };
-document.getElementById('close-settings').onclick = (e) => { e.stopPropagation(); isPaused = false; document.getElementById('settings').classList.remove('active'); haptic('light'); };
-document.getElementById('vol-range').oninput = (e) => { config.volume = e.target.value; localStorage.setItem('dg_vol', config.volume); updateAudioVolume(); };
-document.getElementById('vib-check').onchange = (e) => { config.vibration = e.target.checked; localStorage.setItem('dg_vib', config.vibration); haptic('medium'); };
 
 c.onpointerdown = e => {
-    if (isPaused) return;
-    const coords = getGameCoords(e);
-    input.down = true; input.currX = coords.x;
+    if(overlay.classList.contains('active')) return;
+    const rect = c.getBoundingClientRect();
+    input.startX = ((e.touches ? e.touches[0].clientX : e.clientX) - rect.left) / rect.width * W;
+    const touchY = ((e.touches ? e.touches[0].clientY : e.clientY) - rect.top) / rect.height * H;
 
-    if (state === "MENU") {
-        if (coords.y > 480) { 
-            reset(); state = "PLAYING"; playMusic('game'); haptic('medium'); 
-        } else { 
-            charIdx = (charIdx + 1) % 4; haptic('light'); playMusic('menu');
+    if(state === "MENU") {
+        if(touchY > H * 0.75) { 
+            state = "PLAYING"; reset(); switchTrack('game');
+            document.getElementById('open-ui').style.display = 'none';
         }
     } else if (state === "PLAYING") {
-        if (p.rocket <= 0) { bullets.push({x: p.x, y: p.y-40}); haptic('light'); }
+        if(p.rocket <= 0) bullets.push({ x: p.x, y: p.y - 40 });
     } else if (state === "GAMEOVER") {
-        if (coords.y > 320 && coords.y < 420) { reset(); state = "PLAYING"; playMusic('game'); haptic('medium'); }
-        else if (coords.y >= 420) { state = "MENU"; playMusic('menu'); haptic('light'); }
+        if(touchY > H/2 - 50 && touchY < H/2 + 50) { state = "PLAYING"; reset(); switchTrack('game'); document.getElementById('open-ui').style.display = 'none'; }
+        else if(touchY > H/2 + 60) { state = "MENU"; switchTrack('menu'); document.getElementById('open-ui').style.display = 'flex'; }
     }
 };
 
-window.onpointermove = e => { if (input.down) input.currX = getGameCoords(e).x; };
-window.onpointerup = () => input.down = false;
+window.onpointermove = e => {
+    const rect = c.getBoundingClientRect();
+    input.currX = ((e.touches ? e.touches[0].clientX : e.clientX) - rect.left) / rect.width * W;
+};
+
+window.onpointerup = e => {
+    if(state === "MENU") {
+        const dist = input.currX - input.startX;
+        if(Math.abs(dist) > 40) {
+            charIdx = (charIdx + (dist > 0 ? -1 : 1) + 4) % 4;
+            if(settings.vibration) tg.HapticFeedback.selectionChanged();
+        }
+    }
+};
 
 function loop() {
     requestAnimationFrame(loop);
-    if(loaded < 8 || isPaused) return;
+    if(loadedCount < 8) return;
+    ctx.drawImage(imgs["bg.jpg"], 0, 0, W, H);
 
     if(state === "PLAYING") {
-        let speedMult = 1 + (Math.floor(score / 80) * 0.2);
-        let dx = input.currX - p.x;
-        if(dx > W/2) dx -= W; else if(dx < -W/2) dx += W;
-        p.vx += (dx * 0.45 - p.vx) * 0.15; p.x += p.vx;
-        if(p.x > W) p.x -= W; else if(p.x < 0) p.x += W;
-        
-        if(p.rocket > 0) { p.vy = ROCKET; p.rocket--; p.ang += 0.3; } 
-        else { p.vy += G * speedMult; p.ang *= 0.85; p.ang += (p.vx * 0.05 - p.ang) * 0.1; }
+        let diff = 1 + (score / 3000);
+        let speedKmh = 40 + (score / 70) * 0.25;
+        let targetVX = (input.currX - p.x) * 0.2;
+        p.vx += (targetVX - p.vx) * 0.25; p.x += p.vx;
+        if(p.vx > 0.5) p.dir = 1; else if(p.vx < -0.5) p.dir = -1;
+        if(p.x > W) p.x = 0; else if(p.x < 0) p.x = W;
+
+        if(p.rocket > 0) { p.vy = rocketPower; p.rocket--; p.ang += 0.4; } 
+        else { p.vy += gravity * diff; p.ang *= 0.92; p.ang += (p.vx * 0.04 - p.ang) * 0.12; }
         p.y += p.vy;
-        
-        let shift = p.y < H/2 ? H/2 - p.y : 0; if(shift) p.y = H/2;
+
+        let shift = 0; if(p.y < H * 0.45) { shift = H * 0.45 - p.y; p.y = H * 0.45; }
 
         plats.forEach(pl => {
             pl.y += shift;
-            if(pl.type===1) { pl.x += pl.sp * speedMult; if(pl.x<0 || pl.x>W-pl.w) pl.sp*=-1; }
-            if(!pl.scored && p.y < pl.y) { score += 2; pl.scored = true; }
-            if(p.vy>0 && pl.active && p.x+25>pl.x && p.x-25<pl.x+pl.w && p.y+40>pl.y && p.y+40<pl.y+pl.h) {
-                p.vy = pl.spring ? SPRING : JUMP; if(pl.type===2) pl.active = false; haptic('light');
+            if(pl.type === 1) { pl.x += pl.sp; if(pl.x < 0 || pl.x > W-pl.w) pl.sp *= -1; }
+            if(!pl.scored && p.y < pl.y) { score += 10; pl.scored = true; }
+            if(p.vy > 0 && pl.active && p.x+20 > pl.x && p.x-20 < pl.x+pl.w && p.y+40 > pl.y && p.y+40 < pl.y+pl.h) {
+                p.vy = pl.spring ? springPower : jumpPower;
+                if(pl.type === 2) pl.active = false;
+                if(settings.vibration) tg.HapticFeedback.impactOccurred('medium');
             }
         });
-        bullets.forEach((b,i) => { b.y -= 18; if(b.y < -50) bullets.splice(i,1); });
-        enemies.forEach((e,i) => {
-            e.y += shift; 
-            if(p.rocket<=0 && Math.hypot(p.x-e.x, p.y-e.y) < 45) { state = "GAMEOVER"; haptic('error'); }
-            bullets.forEach((bu,bi) => { if(Math.hypot(bu.x-e.x, bu.y-e.y)<40) { enemies.splice(i,1); bullets.splice(bi,1); score += 10; haptic('heavy'); }});
-        });
-        if(score > high) { high = score; localStorage.setItem('d_high_final', high); }
-        while(plats.length < 12) spawn(Math.min(...plats.map(o=>o.y)) - 90);
-        plats = plats.filter(pl => pl.y < H + 50);
-        if(p.y > H + 100) { state = "GAMEOVER"; playMusic('stop'); haptic('error'); }
-    }
 
-    ctx.drawImage(imgs["bg.jpg"], 0, 0, W, H);
-    if(state === "MENU") {
-        drawSprite(files[charIdx], W/2, H/2 + Math.sin(Date.now()*0.003)*15, 220);
-        ctx.fillStyle = "#fff"; ctx.beginPath(); ctx.roundRect(W/2-80, H-90, 160, 50, 25); ctx.fill();
-        ctx.fillStyle = "#000"; ctx.font = "bold 20px Arial"; ctx.textAlign="center"; ctx.fillText("ИГРАТЬ", W/2, H-58);
-    } else {
+        boosters.forEach((b, i) => { b.y += shift; if(Math.hypot(p.x - b.x, p.y - b.y) < 35) { p.rocket = 70; boosters.splice(i, 1); }});
+        bullets.forEach((b, i) => { b.y -= 14; if(b.y < -50) bullets.splice(i, 1); });
+        enemies.forEach((e, i) => {
+            e.y += shift; let drift = Math.sin(Date.now()*0.003 + e.t) * 45;
+            e.angVel += (Math.random() - 0.5) * 0.02;
+            e.angVel *= 0.95;
+            e.ang += e.angVel;
+            if(p.rocket <= 0 && Math.hypot(p.x - (e.x + drift), p.y - e.y) < 35) { state = "GAMEOVER"; if(settings.vibration) tg.HapticFeedback.impactOccurred('heavy'); }
+            bullets.forEach((bu, bi) => { 
+                if(Math.hypot(bu.x - (e.x + drift), bu.y - e.y) < 40) { 
+                    for(let j=0; j<12; j++) particles.push({ x: e.x + drift, y: e.y, vx: (Math.random()-0.5)*6, vy: (Math.random()-0.5)*6-2, life: 30 });
+                    enemies.splice(i, 1); bullets.splice(bi, 1); score += 100;
+                    if(settings.vibration) tg.HapticFeedback.impactOccurred('heavy');
+                }
+            });
+        });
+
+        if(score > high) { high = score; localStorage.setItem('biicla_high', high); }
+        while(plats.length < 15) spawn(Math.min(...plats.map(o=>o.y)) - 80);
+        plats = plats.filter(pl => pl.y < H + 100);
+        if(p.y > H + 100) { state = "GAMEOVER"; switchTrack('stop'); document.getElementById('open-ui').style.display = 'flex'; }
+
+        // DRAW
         plats.forEach(pl => {
             if(!pl.active) return;
-            ctx.fillStyle = pl.type==1?"#FFD700":pl.type==2?"#FF3B30":"#FFFFFF";
-            ctx.beginPath(); ctx.roundRect(pl.x, pl.y, pl.w, pl.h, 12); ctx.fill();
-            if(pl.spring) { ctx.fillStyle="#555"; ctx.fillRect(pl.x+pl.w/2-8, pl.y-6, 16, 6); }
+            ctx.fillStyle = pl.type === 1 ? "#FFD700" : (pl.type === 2 ? "#ff1a1a" : "#fff");
+            ctx.beginPath(); ctx.roundRect(pl.x, pl.y, pl.w, pl.h, 8); ctx.fill();
+            ctx.strokeStyle = "#000"; ctx.lineWidth = 2; ctx.stroke();
+            if(pl.spring) { ctx.fillStyle="#000"; ctx.fillRect(pl.x+pl.w/2-8, pl.y-6, 16, 6); }
         });
-        enemies.forEach(e => drawSprite("hot.webp", e.x, e.y, 65));
-        bullets.forEach(b => drawSprite("igla.webp", b.x, b.y, 35));
-        drawSprite(files[charIdx], p.x, p.y, 85, p.ang, p.vx < 0);
+        boosters.forEach(b => { 
+            ctx.save(); ctx.translate(b.x, b.y); ctx.rotate(Math.sin(Date.now()*0.01)*0.2);
+            let img = imgs["burn.webp"], w = 20, h = w * (img.height/img.width);
+            ctx.drawImage(img, -w/2, -h/2, w, h); ctx.restore();
+        });
+        enemies.forEach(e => { let d = Math.sin(Date.now()*0.003 + e.t)*45; 
+            ctx.save();
+            ctx.translate(e.x + d, e.y);
+            ctx.rotate(e.ang);
+            let img = imgs["hot.webp"], w = 35, h = w * (img.height/img.width);
+            ctx.drawImage(img, -w/2, -h/2, w, h);
+            ctx.restore();
+        });
+        bullets.forEach(b => {
+            let img = imgs["igla.webp"], w = 25, h = w * (img.height/img.width);
+            ctx.drawImage(img, b.x-w/2, b.y-h/2, w, h);
+        });
         
-        ctx.fillStyle = "rgba(0,0,0,0.8)"; ctx.fillRect(0, 0, W, 50);
-        ctx.fillStyle = "#fff"; ctx.font = "bold 14px Arial"; ctx.textAlign="left";
-        ctx.fillText("СЧЕТ: " + score, 15, 30);
-        ctx.textAlign="center"; ctx.fillStyle = "#FFD700"; ctx.fillText("РЕКОРД: " + high, W/2, 30);
-        ctx.textAlign="right"; ctx.fillStyle = "#fff"; ctx.fillText("FPS: 60", W - 15, 30);
+        particles.forEach((pr, i) => {
+            pr.x += pr.vx; pr.y += pr.vy; pr.vy += 0.2; pr.life--;
+            ctx.fillStyle = `rgba(255, 100, 50, ${pr.life/30})`; 
+            ctx.beginPath(); ctx.arc(pr.x, pr.y, 3, 0, Math.PI*2); ctx.fill();
+            if(pr.life <= 0) particles.splice(i, 1);
+        });
+        
+        let charImg = imgs[files[charIdx]], cw = 30, ch = cw * (charImg.height/charImg.width);
+        ctx.save(); ctx.translate(p.x, p.y); ctx.rotate(p.ang); if(p.dir === -1) ctx.scale(-1, 1);
+        ctx.drawImage(charImg, -cw/2, -ch/2, cw, ch); ctx.restore();
 
-        if(state === "GAMEOVER") {
-            ctx.fillStyle = "rgba(0,0,0,0.9)"; ctx.fillRect(0,0,W,H);
-            ctx.fillStyle = "#fff"; ctx.textAlign="center"; ctx.font = "bold 32px Arial"; ctx.fillText("КОНЕЦ", W/2, H/2 - 60);
-            ctx.font = "bold 24px Arial"; ctx.fillText("СЧЕТ: " + score, W/2, H/2 - 15);
-            ctx.fillStyle = "#fff"; ctx.beginPath(); ctx.roundRect(W/2-90, H/2+20, 180, 45, 15); ctx.fill();
-            ctx.fillStyle = "#000"; ctx.font = "bold 18px Arial"; ctx.fillText("ЗАНОВО", W/2, H/2+48);
-            ctx.fillStyle = "#444"; ctx.beginPath(); ctx.roundRect(W/2-90, H/2+75, 180, 45, 15); ctx.fill();
-            ctx.fillStyle = "#fff"; ctx.fillText("МЕНЮ", W/2, H/2+103);
-        }
+        // HUD
+        ctx.fillStyle = "rgba(0,0,0,0.8)"; ctx.fillRect(0,0,W,50);
+        ctx.strokeStyle = "#ff1a1a"; ctx.lineWidth = 2; ctx.strokeRect(2, 2, W-4, 46);
+        ctx.fillStyle = "#ff1a1a"; ctx.font = "bold 20px sans-serif"; ctx.textAlign="left"; ctx.fillText("SCORE: " + score, 12, 30);
+        ctx.textAlign="right"; ctx.fillText("HIGH: " + high, W-12, 30);
+        ctx.font = "14px sans-serif"; ctx.fillStyle = "#fff"; ctx.textAlign="center"; ctx.fillText("SPEED: " + speedKmh.toFixed(1) + " км/ч", W/2, 35);
+    } 
+    else if(state === "MENU") {
+        ctx.fillStyle = "rgba(0,0,0,0.4)"; ctx.fillRect(0,0,W,H);
+        ctx.fillStyle = "#fff"; ctx.textAlign="center"; ctx.font="800 42px sans-serif"; ctx.fillText("OTSHITIE", W/2, 120);
+        ctx.font="600 20px sans-serif"; ctx.fillText("JUMP", W/2, 150);
+        ctx.font="14px sans-serif"; ctx.fillText("Свайп", W/2, 190);
+        
+        let charImg = imgs[files[charIdx]], cw = 80, ch = cw * (charImg.height/charImg.width);
+        ctx.drawImage(charImg, W/2-cw/2, H/2-ch/2 + Math.sin(Date.now()*0.002)*15, cw, ch);
+        
+        ctx.fillStyle = "#ff1a1a"; ctx.beginPath(); ctx.roundRect(W/2-100, H-120, 200, 60, 20); ctx.fill();
+        ctx.fillStyle = "#fff"; ctx.font="bold 22px sans-serif"; ctx.fillText("ИГРАТЬ", W/2, H-82);
+    }
+    else if(state === "GAMEOVER") {
+        ctx.fillStyle = "rgba(0,0,0,0.85)"; ctx.fillRect(0,0,W,H);
+        ctx.fillStyle = "#fff"; ctx.textAlign="center"; ctx.font = "bold 48px sans-serif"; ctx.fillText("FAIL", W/2, H/2 - 80);
+        ctx.font = "24px sans-serif"; ctx.fillText("СЧЕТ: " + score, W/2, H/2 - 30);
+        ctx.fillStyle = "#fff"; ctx.beginPath(); ctx.roundRect(W/2-90, H/2+10, 180, 55, 15); ctx.fill();
+        ctx.fillStyle = "#000"; ctx.font = "bold 20px sans-serif"; ctx.fillText("ЕЩЕ РАЗ", W/2, H/2+45);
+        ctx.fillStyle = "rgba(255,255,255,0.2)"; ctx.beginPath(); ctx.roundRect(W/2-90, H/2+75, 180, 50, 15); ctx.fill();
+        ctx.fillStyle = "#fff"; ctx.fillText("В МЕНЮ", W/2, H/2+106);
     }
 }
-
-function drawSprite(name, x, y, h, rot=0, flip=false) {
-    if(!imgs[name]?.complete) return;
-    let img = imgs[name], w = h * (img.width / img.height); 
-    ctx.save(); ctx.translate(x, y); ctx.rotate(rot);
-    if(flip) ctx.scale(-1, 1);
-    ctx.drawImage(img, -w/2, -h/2, w, h); ctx.restore();
-}
 loop();
+if(settings.music) audio.menu.play().catch(()=>{});
 </script>
 </body>
 </html>
