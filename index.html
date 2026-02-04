@@ -8,34 +8,29 @@
     <style>
         body { margin: 0; padding: 0; background: #000; overflow: hidden; touch-action: none; font-family: 'Segoe UI', Roboto, sans-serif; user-select: none; -webkit-user-select: none; display: flex; justify-content: center; align-items: center; height: 100vh; width: 100vw; color: white; }
         
-        /* Канвас всегда снизу */
         canvas { display: block; box-shadow: 0 0 20px rgba(0,0,0,0.5); background: #fff; z-index: 1; }
 
-        /* UI слой поверх игры, но клики пропускает сквозь себя */
-        #ui-layer { 
-            position: absolute; top: 0; left: 0; width: 100%; height: 100%; 
-            pointer-events: none; z-index: 10; 
-        }
+        #ui-layer { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 10; }
 
         .settings-panel { 
             position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
-            background: rgba(20,20,20,0.95); padding: 25px; border-radius: 25px;
+            background: rgba(20,20,20,0.98); padding: 25px; border-radius: 25px;
             width: 280px; display: none; border: 2px solid #444;
             box-shadow: 0 0 50px rgba(0,0,0,1); text-align: center;
-            pointer-events: auto; /* Кнопки в настройках должны работать */
+            pointer-events: auto;
         }
         .settings-panel.active { display: block; }
 
         .setting-item { margin: 20px 0; }
-        input[type="range"] { width: 100%; accent-color: #0088cc; }
+        input[type="range"] { width: 100%; accent-color: #0088cc; cursor: pointer; }
         
-        .close-btn { background: #ff3b30; border: none; color: white; padding: 12px 24px; border-radius: 12px; font-weight: bold; cursor: pointer; }
+        .close-btn { background: #ff3b30; border: none; color: white; padding: 12px 24px; border-radius: 12px; font-weight: bold; cursor: pointer; width: 100%; }
 
         .profile-box { 
             position: absolute; top: 50px; left: 20px; display: flex; 
             align-items: center; gap: 10px; opacity: 1; 
         }
-        .profile-img { width: 45px; height: 45px; border-radius: 50%; border: 2px solid #fff; background: #333; }
+        .profile-img { width: 45px; height: 45px; border-radius: 50%; border: 2px solid #fff; background: #333; object-fit: cover; }
 
         .settings-icon { 
             position: absolute; top: 50px; right: 20px; width: 35px; height: 35px; 
@@ -49,7 +44,7 @@
 
 <div id="ui-layer">
     <div class="profile-box">
-        <img src="" class="profile-img" id="user-pic">
+        <img src="" class="profile-img" id="user-pic" style="display:none">
         <div id="user-name" style="text-shadow: 2px 2px 4px rgba(0,0,0,0.8); font-weight: bold; font-size: 18px;">Player</div>
     </div>
     
@@ -79,16 +74,21 @@ tg.ready();
 const user = tg.initDataUnsafe?.user;
 if (user) {
     document.getElementById('user-name').innerText = user.first_name;
-    if (user.photo_url) document.getElementById('user-pic').src = user.photo_url;
+    if (user.photo_url) {
+        const pic = document.getElementById('user-pic');
+        pic.src = user.photo_url;
+        pic.style.display = 'block';
+    }
 }
 
 const c = document.getElementById('c'), ctx = c.getContext('2d');
 const W = 360, H = 640;
+let G = 0.6, JUMP = -15, SPRING = -30, ROCKET = -20;
 let currentScale = 1, offsetLeft = 0, offsetTop = 0;
 
 // Конфиг
 let config = {
-    volume: parseFloat(localStorage.getItem('dg_vol')) || 0.5,
+    volume: parseFloat(localStorage.getItem('dg_vol')) ?? 0.5,
     vibration: localStorage.getItem('dg_vib') !== 'false'
 };
 document.getElementById('vol-range').value = config.volume;
@@ -133,14 +133,13 @@ function haptic(type) {
     try {
         if (type === 'light') tg.HapticFeedback.impactOccurred('light');
         if (type === 'medium') tg.HapticFeedback.impactOccurred('medium');
-        if (type === 'heavy') tg.HapticFeedback.impactOccurred('heavy');
         if (type === 'error') tg.HapticFeedback.notificationOccurred('error');
     } catch(e) {}
 }
 
 function playMusic(type) {
     try {
-        if (type === 'menu') { audio.game.pause(); audio.menu.currentTime = 0; audio.menu.play().catch(()=>{}); }
+        if (type === 'menu') { audio.game.pause(); audio.menu.play().catch(()=>{}); }
         else if (type === 'game') { audio.menu.pause(); audio.game.currentTime = 0; audio.game.play().catch(()=>{}); }
         else { audio.menu.pause(); audio.game.pause(); }
     } catch(e) {}
@@ -155,7 +154,8 @@ function spawn(y) {
 }
 
 function reset() {
-    p.x = W/2; p.y = H-150; p.vx = 0; p.vy = 0; p.ang = 0; p.rocket = 0;
+    p.x = W/2; p.y = H-150; p.vx = 0; p.vy = JUMP; // Даем прыжок при старте!
+    p.ang = 0; p.rocket = 0;
     score = 0; plats = []; enemies = []; bullets = []; boosters = []; particles = [];
     plats.push({x: W/2-60, y: H-50, w: 120, h:25, type: 0, active:true, scored: true}); 
     for(let i=1; i<10; i++) spawn(H - i*100);
@@ -167,7 +167,7 @@ function getGameCoords(e) {
     return { x: (cx - offsetLeft) / currentScale, y: (cy - offsetTop) / currentScale };
 }
 
-// Настройки
+// Настройки UI события
 document.getElementById('open-settings').onclick = (e) => { e.stopPropagation(); isPaused = true; document.getElementById('settings').classList.add('active'); haptic('light'); };
 document.getElementById('close-settings').onclick = (e) => { e.stopPropagation(); isPaused = false; document.getElementById('settings').classList.remove('active'); haptic('light'); };
 document.getElementById('vol-range').oninput = (e) => { config.volume = e.target.value; localStorage.setItem('dg_vol', config.volume); updateAudioVolume(); };
@@ -179,15 +179,13 @@ c.onpointerdown = e => {
     input.down = true; input.currX = coords.x;
 
     if (state === "MENU") {
-        if (audio.menu.paused) playMusic('menu');
-        // Область кнопки ИГРАТЬ (нижняя часть экрана)
         if (coords.y > 480) { 
             reset(); state = "PLAYING"; playMusic('game'); haptic('medium'); 
         } else { 
-            charIdx = (charIdx + 1) % 4; haptic('light'); 
+            charIdx = (charIdx + 1) % 4; haptic('light'); playMusic('menu');
         }
     } else if (state === "PLAYING") {
-        if (p.rocket <= 0) { bullets.push({x: p.x, y: p.y-40}); p.vy -= 1.2; haptic('medium'); }
+        if (p.rocket <= 0) { bullets.push({x: p.x, y: p.y-40}); haptic('light'); }
     } else if (state === "GAMEOVER") {
         if (coords.y > 320 && coords.y < 420) { reset(); state = "PLAYING"; playMusic('game'); haptic('medium'); }
         else if (coords.y >= 420) { state = "MENU"; playMusic('menu'); haptic('light'); }
