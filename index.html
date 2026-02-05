@@ -18,11 +18,7 @@
         .bottom-sheet.open { transform: translateY(0); }
         .handle { width: 40px; height: 5px; background: #ddd; border-radius: 3px; margin: 0 auto 20px; }
         
-        .tabs { display: flex; background: var(--gray); border-radius: 12px; padding: 3px; margin-bottom: 20px; }
-        .tab-btn { flex: 1; border: none; padding: 8px; border-radius: 10px; font-weight: 600; cursor: pointer; background: transparent; }
-        .tab-btn.active { background: #fff; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
-        .content-section { display: none; }
-        .content-section.active { display: block; }
+        .content-section { display: block; }
 
         .ui-item { display: flex; align-items: center; justify-content: space-between; background: var(--gray); padding: 14px; border-radius: 18px; margin-bottom: 10px; }
         .ui-info { display: flex; align-items: center; gap: 12px; font-weight: 600; }
@@ -55,7 +51,7 @@
     <div class="overlay" id="ui-overlay">
         <div class="bottom-sheet" id="ui-sheet">
             <div class="handle"></div>
-            <div id="tab-settings" class="content-section active">
+            <div id="tab-settings" class="content-section">
                 <div class="ui-item">
                     <div class="ui-info"><div class="icon">🔊</div>Музыка</div>
                     <label class="switch"><input type="checkbox" id="set-music" checked><span class="slider"></span></label>
@@ -107,7 +103,8 @@ files.forEach(f => {
 
 const audio = { menu: new Audio('menu.mp3'), game: new Audio('game.mp3') };
 audio.menu.loop = audio.game.loop = true;
-audio.menu.volume = audio.game.volume = settings.volume;
+function volScale(v){ return Math.pow(v, 2); }
+audio.menu.volume = audio.game.volume = volScale(settings.volume);
 audio.menu.muted = audio.game.muted = (settings.volume === 0 || !settings.music);
 
 // UI LOGIC
@@ -141,7 +138,7 @@ document.getElementById('close-ui').onclick = () => {
     localStorage.setItem('biicla_settings', JSON.stringify(settings));
     if(!settings.music) { audio.menu.pause(); audio.game.pause(); audio.menu.muted = audio.game.muted = true; } 
     else { 
-        audio.menu.volume = audio.game.volume = settings.volume; 
+        audio.menu.volume = audio.game.volume = volScale(settings.volume); 
         audio.menu.muted = audio.game.muted = (settings.volume === 0); 
         if(state === "MENU") audio.menu.play().catch(()=>{}); 
     }
@@ -152,7 +149,7 @@ document.getElementById('close-leader').onclick = () => {
 document.getElementById('set-volume').addEventListener('input', (e) => {
     const v = parseFloat(e.target.value || '1');
     settings.volume = v;
-    audio.menu.volume = audio.game.volume = v;
+    audio.menu.volume = audio.game.volume = volScale(v);
     audio.menu.muted = audio.game.muted = (v === 0 || !settings.music);
     try { localStorage.setItem('biicla_settings', JSON.stringify(settings)); } catch {}
 });
@@ -211,14 +208,13 @@ c.onpointerdown = e => {
     if(state === "MENU") {
         if(touchY > H * 0.75) { 
             state = "PLAYING"; reset(); switchTrack('game');
-            document.getElementById('open-ui').style.display = 'none';
             document.documentElement.requestFullscreen?.();
         }
     } else if (state === "PLAYING") {
         if(p.rocket <= 0) bullets.push({ x: p.x, y: p.y - 40 });
     } else if (state === "GAMEOVER") {
-        if(touchY > H/2 - 50 && touchY < H/2 + 50) { state = "PLAYING"; reset(); switchTrack('game'); document.getElementById('open-ui').style.display = 'none'; }
-        else if(touchY > H/2 + 60) { state = "MENU"; switchTrack('menu'); document.getElementById('open-ui').style.display = 'flex'; }
+        if(touchY > H/2 - 50 && touchY < H/2 + 50) { state = "PLAYING"; reset(); switchTrack('game'); }
+        else if(touchY > H/2 + 60) { state = "MENU"; switchTrack('menu'); }
     }
 };
 
@@ -343,8 +339,8 @@ function loop() {
     else if(state === "MENU") {
         ctx.fillStyle = "rgba(0,0,0,0.4)"; ctx.fillRect(0,0,W,H);
         ctx.fillStyle = "#fff"; ctx.textAlign="center"; ctx.font="800 42px sans-serif"; ctx.fillText("OTSHITIE", W/2, 100);
-        ctx.font="600 20px sans-serif"; ctx.fillText("JUMP", W/2, 120);
-        ctx.font="14px sans-serif"; ctx.fillText("Свайп для выбора персонажа", W/2, 150);
+        ctx.font="600 20px sans-serif"; ctx.fillText("JUMP", W/2, 130);
+        ctx.font="14px sans-serif"; ctx.fillText("Свайп для выбора персонажа", W/2, 160);
         
         let charImg = imgs[files[charIdx]], cw = 80, ch = cw * (charImg.height/charImg.width);
         ctx.drawImage(charImg, W/2-cw/2, H/2-ch/2 + Math.sin(Date.now()*0.002)*15, cw, ch);
