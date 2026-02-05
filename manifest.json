@@ -1,0 +1,20 @@
+{
+  "name": "Biicla Jump: Ultimate",
+  "short_name": "Biicla Jump",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#111",
+  "theme_color": "#ff1a1a",
+  "icons": [
+    {
+      "src": "/liza.webp",
+      "sizes": "192x192",
+      "type": "image/webp"
+    },
+    {
+      "src": "/nika.webp",
+      "sizes": "512x512",
+      "type": "image/webp"
+    }
+  ]
+}
