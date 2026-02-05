@@ -2,12 +2,33 @@
 <html lang="ru">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <title>Biicla Jump: Ultimate</title>
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <link rel="manifest" href="/manifest.json">
     <style>
          :root { --red: #ff1a1a; --bg-card: rgba(255, 255, 255, 0.98); --gray: #f2f2f7; }
-        body { margin: 0; padding: 0; background: #111; overflow: hidden; touch-action: none; overscroll-behavior: none; font-family: -apple-system, system-ui, sans-serif; user-select: none; -webkit-user-select: none; display: flex; justify-content: center; align-items: center; height: 100vh; }
+        body { 
+            margin: 0; 
+            padding: 0; 
+            background: #111; 
+            overflow: hidden; 
+            touch-action: none; 
+            overscroll-behavior: none; 
+            font-family: -apple-system, system-ui, sans-serif; 
+            user-select: none; 
+            -webkit-user-select: none; 
+            display: flex; 
+            justify-content: center; 
+            align-items: center; 
+            height: 100vh; 
+            width: 100vw; 
+            padding-top: env(safe-area-inset-top, 0px); 
+            padding-bottom: env(safe-area-inset-bottom, 0px); 
+        }
         #game-container { position: relative; width: 100vw; height: 100vh; background: #fff; overflow: hidden; box-shadow: 0 0 100px rgba(0,0,0,0.5); touch-action: none; overscroll-behavior: none; }
         canvas { display: block; width: 100%; height: 100%; touch-action: none; -webkit-touch-callout: none; }
 
@@ -80,10 +101,24 @@
 <script>
 const tg = window.Telegram.WebApp;
 tg.ready?.();
+try {
+    tg.requestFullscreen?.();
+    tg.lockOrientation?.();
+    tg.addToHomeScreen?.();
+} catch (e) {}
 tg.expand();
 tg.disableVerticalSwipes?.();
 tg.enableClosingConfirmation?.();
 tg.setHeaderColor?.('bg_color');
+
+// Настройка полноэкранного режима
+if (tg.viewportStableHeight) {
+    // Используем стабильную высоту вьюпорта для лучшей производительности
+    tg.onEvent?.('viewportChanged', () => {
+        // Обновляем размеры при изменении вьюпорта
+        setTimeout(resize, 100);
+    });
+}
 
 const c = document.getElementById('c'), ctx = c.getContext('2d');
 let W = 0, H = 0;
@@ -162,13 +197,30 @@ let input = { currX: 0, startX: 0 };
 function resize() {
     const rect = document.getElementById('game-container').getBoundingClientRect();
     const dpr = window.devicePixelRatio || 1;
-    W = Math.round(rect.width); H = Math.round(rect.height);
-    c.width = Math.round(W * dpr); c.height = Math.round(H * dpr);
+    
+    // Используем стабильные размеры вьюпорта если доступны
+    if (tg.viewportStableHeight && tg.viewportStableWidth) {
+        W = Math.round(tg.viewportStableWidth);
+        H = Math.round(tg.viewportStableHeight);
+    } else {
+        W = Math.round(rect.width); 
+        H = Math.round(rect.height);
+    }
+    
+    c.width = Math.round(W * dpr); 
+    c.height = Math.round(H * dpr);
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    if(state !== "PLAYING") { input.currX = W/2; p.x = W/2; p.y = H-150; }
+    if(state !== "PLAYING") { 
+        input.currX = W/2; 
+        p.x = W/2; 
+        p.y = H-150; 
+    }
 }
-window.addEventListener('resize', resize); 
-tg.onEvent?.('viewportChanged', resize);
+window.addEventListener('resize', resize);
+// Заменим вызов на нашу улучшенную функцию
+tg.onEvent?.('viewportChanged', () => {
+    setTimeout(resize, 100);
+});
 resize();
 
 function spawn(y) {
@@ -191,9 +243,35 @@ function reset() {
 
 function switchTrack(to) {
     if(!settings.music) return;
-    if(to === 'game') { audio.menu.pause(); audio.game.currentTime = 0; audio.game.play().catch(()=>{}); }
-    else if(to === 'menu') { audio.game.pause(); audio.menu.currentTime = 0; audio.menu.play().catch(()=>{}); }
-    else { audio.menu.pause(); audio.game.pause(); }
+    if(to === 'game') { 
+        audio.menu.pause(); 
+        audio.game.currentTime = 0; 
+        audio.game.play().catch(()=>{}); 
+        
+        // Скрываем элементы управления в игровом режиме
+        document.getElementById('open-ui').style.display = 'none';
+        document.getElementById('open-leader').style.display = 'none';
+        document.getElementById('app-close').style.display = 'none';
+    }
+    else if(to === 'menu') { 
+        audio.game.pause(); 
+        audio.menu.currentTime = 0; 
+        audio.menu.play().catch(()=>{}); 
+        
+        // Показываем элементы управления в меню
+        document.getElementById('open-ui').style.display = 'flex';
+        document.getElementById('open-leader').style.display = 'flex';
+        document.getElementById('app-close').style.display = 'flex';
+    }
+    else { 
+        audio.menu.pause(); 
+        audio.game.pause(); 
+        
+        // Показываем элементы управления при остановке
+        document.getElementById('open-ui').style.display = 'flex';
+        document.getElementById('open-leader').style.display = 'flex';
+        document.getElementById('app-close').style.display = 'flex';
+    }
 }
 
 c.onpointerdown = e => {
@@ -206,9 +284,14 @@ c.onpointerdown = e => {
     c.setPointerCapture?.(e.pointerId);
 
     if(state === "MENU") {
-        if(touchY > H * 0.75) { 
+        if(touchY > H * 0.75) {
             state = "PLAYING"; reset(); switchTrack('game');
             document.documentElement.requestFullscreen?.();
+            
+            // Скрываем элементы управления в игровом режиме
+            document.getElementById('open-ui').style.display = 'none';
+            document.getElementById('open-leader').style.display = 'none';
+            document.getElementById('app-close').style.display = 'none';
         }
     } else if (state === "PLAYING") {
         if(p.rocket <= 0) bullets.push({ x: p.x, y: p.y - 40 });
@@ -277,7 +360,11 @@ function loop() {
             e.angVel += (Math.random() - 0.5) * 0.02;
             e.angVel *= 0.95;
             e.ang += e.angVel;
-            if(p.rocket <= 0 && Math.hypot(p.x - (e.x + drift), p.y - e.y) < 35) { state = "GAMEOVER"; if(settings.vibration) tg.HapticFeedback.impactOccurred('heavy'); }
+            if(p.rocket <= 0 && Math.hypot(p.x - (e.x + drift), p.y - e.y) < 35) { 
+                state = "GAMEOVER"; 
+                switchTrack('stop');
+                if(settings.vibration) tg.HapticFeedback.impactOccurred('heavy'); 
+            }
             bullets.forEach((bu, bi) => { 
                 if(Math.hypot(bu.x - (e.x + drift), bu.y - e.y) < 40) { 
                     for(let j=0; j<12; j++) particles.push({ x: e.x + drift, y: e.y, vx: (Math.random()-0.5)*6, vy: (Math.random()-0.5)*6-2, life: 30 });
@@ -290,7 +377,10 @@ function loop() {
         if(score > high) { high = score; localStorage.setItem('biicla_high', high); }
         while(plats.length < 15) spawn(Math.min(...plats.map(o=>o.y)) - 80);
         plats = plats.filter(pl => pl.y < H + 100);
-        if(p.y > H + 100) { state = "GAMEOVER"; switchTrack('stop'); document.getElementById('open-ui').style.display = 'flex'; }
+        if(p.y > H + 100) { 
+            state = "GAMEOVER"; 
+            switchTrack('stop'); 
+        }
 
         // DRAW
         plats.forEach(pl => {
