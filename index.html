@@ -55,7 +55,6 @@
         .btn-main { width: 100%; background: var(--red); color: white; border: none; padding: 18px; border-radius: 20px; font-weight: bold; font-size: 18px; cursor: pointer; margin-top: 10px; }
         .settings-btn { position: absolute; bottom: 20px; right: 20px; width: 50px; height: 50px; background: rgba(255,255,255,0.9); border-radius: 15px; display: flex; align-items: center; justify-content: center; font-size: 24px; border: none; z-index: 50; }
         .rating-btn { position: absolute; bottom: 20px; left: 20px; width: 50px; height: 50px; background: rgba(255,255,255,0.9); border-radius: 15px; display: flex; align-items: center; justify-content: center; font-size: 24px; border: none; z-index: 50; }
-        .close-btn { position: absolute; top: calc(env(safe-area-inset-top, 0px) + 16px); left: 16px; width: 42px; height: 42px; background: rgba(255,255,255,0.9); border-radius: 12px; display: flex; align-items: center; justify-content: center; font-size: 20px; border: none; z-index: 60; }
         
         .leader-row { display: flex; justify-content: space-between; padding: 12px; border-bottom: 1px solid #eee; }
         .leader-row.me { color: var(--red); font-weight: 800; }
@@ -67,7 +66,6 @@
     <canvas id="c"></canvas>
     <button class="settings-btn" id="open-ui">⚙️</button>
     <button class="rating-btn" id="open-leader">🏆</button>
-    <button class="close-btn" id="app-close">✖</button>
 
     <div class="overlay" id="ui-overlay">
         <div class="bottom-sheet" id="ui-sheet">
@@ -108,8 +106,20 @@ try {
 } catch (e) {}
 tg.expand();
 tg.disableVerticalSwipes?.();
-tg.enableClosingConfirmation?.();
+// tg.enableClosingConfirmation?.(); // Отключено, чтобы приложение закрывалось сразу
 tg.setHeaderColor?.('bg_color');
+
+// Обработчик закрытия приложения
+tg.onEvent?.('back_button_pressed', () => {
+    tg.close?.();
+});
+
+// Также закрываем приложение при нажатии на Esc в браузере
+document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') {
+        tg.close?.();
+    }
+});
 
 // Настройка полноэкранного режима
 if (tg.viewportStableHeight) {
@@ -164,7 +174,6 @@ document.getElementById('open-leader').onclick = () => {
     leaderOverlay.classList.add('active'); 
     setTimeout(() => leaderSheet.classList.add('open'), 10); 
 };
-document.getElementById('app-close').onclick = () => { tg.close?.(); };
 document.getElementById('close-ui').onclick = () => {
     sheet.classList.remove('open'); setTimeout(() => overlay.classList.remove('active'), 300);
     settings.music = document.getElementById('set-music').checked;
@@ -251,7 +260,6 @@ function switchTrack(to) {
         // Скрываем элементы управления в игровом режиме
         document.getElementById('open-ui').style.display = 'none';
         document.getElementById('open-leader').style.display = 'none';
-        document.getElementById('app-close').style.display = 'none';
     }
     else if(to === 'menu') { 
         audio.game.pause(); 
@@ -261,7 +269,6 @@ function switchTrack(to) {
         // Показываем элементы управления в меню
         document.getElementById('open-ui').style.display = 'flex';
         document.getElementById('open-leader').style.display = 'flex';
-        document.getElementById('app-close').style.display = 'flex';
     }
     else { 
         audio.menu.pause(); 
@@ -270,7 +277,6 @@ function switchTrack(to) {
         // Показываем элементы управления при остановке
         document.getElementById('open-ui').style.display = 'flex';
         document.getElementById('open-leader').style.display = 'flex';
-        document.getElementById('app-close').style.display = 'flex';
     }
 }
 
@@ -291,7 +297,6 @@ c.onpointerdown = e => {
             // Скрываем элементы управления в игровом режиме
             document.getElementById('open-ui').style.display = 'none';
             document.getElementById('open-leader').style.display = 'none';
-            document.getElementById('app-close').style.display = 'none';
         }
     } else if (state === "PLAYING") {
         if(p.rocket <= 0) bullets.push({ x: p.x, y: p.y - 40 });
