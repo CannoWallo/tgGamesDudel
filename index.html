@@ -152,6 +152,10 @@ function volScale(v){ return Math.pow(v, 2); }
 audio.menu.volume = audio.game.volume = volScale(settings.volume);
 audio.menu.muted = audio.game.muted = (settings.volume === 0 || !settings.music);
 
+// Переменные для регулировки громкости при движении
+let initialVolume = settings.volume;
+let volumeAdjustmentActive = false;
+
 // UI LOGIC
 
 function updateLeaderboardUI() {
@@ -293,12 +297,15 @@ c.onpointerdown = e => {
         if(touchY > H * 0.75) {
             state = "PLAYING"; reset(); switchTrack('game');
             document.documentElement.requestFullscreen?.();
-            
+
             // Скрываем элементы управления в игровом режиме
             document.getElementById('open-ui').style.display = 'none';
             document.getElementById('open-leader').style.display = 'none';
         }
     } else if (state === "PLAYING") {
+        // Начинаем регулировку громкости при движении в игровом режиме
+        initialVolume = settings.volume;
+        volumeAdjustmentActive = true;
         if(p.rocket <= 0) bullets.push({ x: p.x, y: p.y - 40 });
     } else if (state === "GAMEOVER") {
         if(touchY > H/2 - 50 && touchY < H/2 + 50) { state = "PLAYING"; reset(); switchTrack('game'); }
@@ -310,11 +317,39 @@ window.onpointermove = e => {
     e.preventDefault();
     const rect = c.getBoundingClientRect();
     input.currX = ((e.touches ? e.touches[0].clientX : e.clientX) - rect.left) / rect.width * W;
+    
+    // Регулировка громкости при движении в игровом режиме
+    if(state === "PLAYING" && volumeAdjustmentActive) {
+        const deltaX = input.currX - input.startX;
+        // Масштабируем изменение громкости: движение влево - тише, вправо - громче
+        const volumeChange = (deltaX / W) * 0.5; // Максимальное изменение ±50%
+        let newVolume = initialVolume + volumeChange;
+        
+        // Ограничиваем значение громкости от 0 до 1
+        newVolume = Math.max(0, Math.min(1, newVolume));
+        
+        // Применяем новую громкость
+        settings.volume = newVolume;
+        audio.menu.volume = audio.game.volume = volScale(newVolume);
+        audio.menu.muted = audio.game.muted = (newVolume === 0 || !settings.music);
+        
+        // Обновляем значение слайдера громкости в настройках
+        document.getElementById('set-volume').value = newVolume;
+    }
 };
 
 window.onpointerup = e => {
     e.preventDefault();
     c.releasePointerCapture?.(e.pointerId);
+    
+    // Сохраняем настройки громкости после регулировки
+    if(volumeAdjustmentActive) {
+        volumeAdjustmentActive = false;
+        try { 
+            localStorage.setItem('biicla_settings', JSON.stringify(settings)); 
+        } catch {}
+    }
+    
     if(state === "MENU") {
         const dist = input.currX - input.startX;
         if(Math.abs(dist) > 60) {
@@ -325,6 +360,14 @@ window.onpointerup = e => {
 };
 window.onpointercancel = () => {
     input.currX = p.x;
+    
+    // Завершаем регулировку громкости при отмене
+    if(volumeAdjustmentActive) {
+        volumeAdjustmentActive = false;
+        try { 
+            localStorage.setItem('biicla_settings', JSON.stringify(settings)); 
+        } catch {}
+    }
 };
 
 function loop() {
