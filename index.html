@@ -84,52 +84,40 @@
 const tg = window.Telegram.WebApp;
 
 // Проверяем, что приложение запущено внутри Telegram Web App
-if (!tg.initData) {
+if (!tg.initData || !window.Telegram?.WebApp?.initData) {
     // Если приложение открыто не в Telegram, показываем сообщение
     document.body.innerHTML = '<div style="display:flex;justify-content:center;align-items:center;height:100vh;background:#111;color:white;font-family:sans-serif;"><p>Пожалуйста, откройте это приложение в Telegram</p></div>';
-    // Не выбрасываем ошибку, а просто завершаем выполнение
-    return;
-}
+    // Прекращаем выполнение скрипта
+    throw new Error('Приложение должно запускаться в Telegram Web App');
+} else {
+    // Основная логика приложения
+    tg.ready?.();
+    try {
+        tg.requestFullscreen?.();
+        tg.lockOrientation?.();
+        tg.addToHomeScreen?.();
+    } catch (e) {}
 
-// Дополнительно проверяем, что мы внутри Telegram Web App
-if (!window.Telegram?.WebApp?.initData) {
-    document.body.innerHTML = '<div style="display:flex;justify-content:center;align-items:center;height:100vh;background:#111;color:white;font-family:sans-serif;"><p>Пожалуйста, откройте это приложение в Telegram</p></div>';
-    // Не выбрасываем ошибку, а просто завершаем выполнение
-    return;
-}
+    tg.expand();
+    tg.disableVerticalSwipes?.();
+    // tg.enableClosingConfirmation?.(); // Отключено, чтобы приложение закрывалось сразу
+    tg.setHeaderColor?.('bg_color');
 
-tg.ready?.();
-try {
-    tg.requestFullscreen?.();
-    tg.lockOrientation?.();
-    tg.addToHomeScreen?.();
-} catch (e) {}
-
-tg.expand();
-tg.disableVerticalSwipes?.();
-// tg.enableClosingConfirmation?.(); // Отключено, чтобы приложение закрывалось сразу
-tg.setHeaderColor?.('bg_color');
-
-// Обработчик закрытия приложения
-tg.onEvent?.('back_button_pressed', () => {
-    tg.close?.();
-});
-
-// Также закрываем приложение при нажатии на Esc в браузере
-document.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape') {
+    // Обработчик закрытия приложения
+    tg.onEvent?.('back_button_pressed', () => {
         tg.close?.();
-    }
-});
-
-
-// Настройка полноэкранного режима
-if (tg.viewportStableHeight) {
-    // Используем стабильную высоту вьюпорта для лучшей производительности
-    tg.onEvent?.('viewportChanged', () => {
-        // Обновляем размеры при изменении вьюпорта
-        setTimeout(resize, 100);
     });
+
+    // Также закрываем приложение при нажатии на Esc в браузере
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') {
+            tg.close?.();
+        }
+    });
+
+
+    // Настройка полноэкранного режима
+    tg.onEvent?.('viewportChanged', resize);
 }
 
 const c = document.getElementById('c'), ctx = c.getContext('2d');
