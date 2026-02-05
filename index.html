@@ -82,15 +82,15 @@
 
 <script>
 const tg = window.Telegram.WebApp;
+let isPaused = false; // Состояние паузы
 
 // Проверяем, что приложение запущено внутри Telegram Web App
 if (!tg.initData || !window.Telegram?.WebApp?.initData) {
-    // Если приложение открыто не в Telegram, показываем сообщение
-    document.body.innerHTML = '<div style="display:flex;justify-content:center;align-items:center;height:100vh;background:#111;color:white;font-family:sans-serif;"><p>Пожалуйста, откройте это приложение в Telegram</p></div>';
-    // Прекращаем выполнение скрипта
-    throw new Error('Приложение должно запускаться в Telegram Web App');
+    // ДЕБАГ РЕЖИМ: Если не в телеграм, позволяем запустить для теста (убрать в продакшене)
+    console.warn('Приложение запущено вне Telegram. Включен режим отладки.');
+    // document.body.innerHTML = '<div style="display:flex;justify-content:center;align-items:center;height:100vh;background:#111;color:white;font-family:sans-serif;"><p>Пожалуйста, откройте это приложение в Telegram</p></div>';
+    // throw new Error('Приложение должно запускаться в Telegram Web App');
 } else {
-    // Основная логика приложения
     tg.ready?.();
     try {
         tg.requestFullscreen?.();
@@ -100,23 +100,10 @@ if (!tg.initData || !window.Telegram?.WebApp?.initData) {
 
     tg.expand();
     tg.disableVerticalSwipes?.();
-    // tg.enableClosingConfirmation?.(); // Отключено, чтобы приложение закрывалось сразу
     tg.setHeaderColor?.('bg_color');
 
-    // Обработчик закрытия приложения
-    tg.onEvent?.('back_button_pressed', () => {
-        tg.close?.();
-    });
-
-    // Также закрываем приложение при нажатии на Esc в браузере
-    document.addEventListener('keydown', (e) => {
-        if (e.key === 'Escape') {
-            tg.close?.();
-        }
-    });
-
-
-    // Настройка полноэкранного режима
+    tg.onEvent?.('back_button_pressed', () => tg.close?.());
+    document.addEventListener('keydown', (e) => { if (e.key === 'Escape') tg.close?.(); });
     tg.onEvent?.('viewportChanged', resize);
 }
 
@@ -131,9 +118,15 @@ if(typeof settings.volume !== 'number') settings.volume = 1;
 
 const imgs = {}, files = ["liza.webp", "nika.webp", "tvorch.webp", "egor.webp", "bg.jpg", "burn.webp", "igla.webp", "hot.webp"];
 let loadedCount = 0;
+// Функция безопасной загрузки с фоллбэком
 files.forEach(f => {
-    let i = new Image(); i.src = f;
+    let i = new Image(); 
+    i.src = f;
     i.onload = () => loadedCount++;
+    i.onerror = () => { 
+        console.log("Image failed:", f); 
+        loadedCount++; // Считаем загруженным, чтобы игра стартовала
+    };
     imgs[f] = i;
 });
 
@@ -143,8 +136,6 @@ function volScale(v){ return Math.pow(v, 2); }
 audio.menu.volume = audio.game.volume = volScale(settings.volume);
 audio.menu.muted = audio.game.muted = (settings.volume === 0 || !settings.music);
 
-// Переменные для регулировки громкости при движении
-
 // UI LOGIC
 
 function updateLeaderboardUI() {
@@ -153,10 +144,23 @@ function updateLeaderboardUI() {
     container.innerHTML = mock.map((p, i) => `<div class="leader-row ${p.isMe?'me':''}"><span>${i+1}. ${p.name}</span><span>${p.s}</span></div>`).join('');
 }
 
+// === НОВАЯ ФУНКЦИЯ: Управление паузой ===
+function togglePause(active) {
+    if(state !== "PLAYING") return;
+    isPaused = active;
+    if(isPaused) {
+        audio.game.pause();
+    } else if(settings.music && !isPaused) {
+        audio.game.play().catch(()=>{});
+    }
+}
+
 const overlay = document.getElementById('ui-overlay'), sheet = document.getElementById('ui-sheet');
 const leaderOverlay = document.getElementById('leader-overlay'), leaderSheet = document.getElementById('leader-sheet');
+
 document.getElementById('open-ui').onclick = () => { 
     overlay.classList.add('active'); 
+    togglePause(true); // Ставим на паузу
     document.getElementById('set-volume').value = settings.volume;
     document.getElementById('set-music').checked = settings.music;
     document.getElementById('set-vibro').checked = settings.vibration;
@@ -164,11 +168,14 @@ document.getElementById('open-ui').onclick = () => {
 };
 document.getElementById('open-leader').onclick = () => { 
     updateLeaderboardUI();
+    overlay.classList.add('active'); // Используем общий оверлей для затемнения
+    togglePause(true); // Ставим на паузу
     leaderOverlay.classList.add('active'); 
     setTimeout(() => leaderSheet.classList.add('open'), 10); 
 };
 document.getElementById('close-ui').onclick = () => {
     sheet.classList.remove('open'); setTimeout(() => overlay.classList.remove('active'), 300);
+    togglePause(false); // Снимаем паузу
     settings.music = document.getElementById('set-music').checked;
     settings.vibration = document.getElementById('set-vibro').checked;
     settings.volume = parseFloat(document.getElementById('set-volume').value || '1');
@@ -177,11 +184,17 @@ document.getElementById('close-ui').onclick = () => {
     else { 
         audio.menu.volume = audio.game.volume = volScale(settings.volume); 
         audio.menu.muted = audio.game.muted = (settings.volume === 0); 
-        if(state === "MENU") audio.menu.play().catch(()=>{}); 
+        if(state === "MENU") audio.menu.play().catch(()=>{});
+        else if(state === "PLAYING" && !isPaused) audio.game.play().catch(()=>{});
     }
 };
 document.getElementById('close-leader').onclick = () => {
-    leaderSheet.classList.remove('open'); setTimeout(() => leaderOverlay.classList.remove('active'), 300);
+    leaderSheet.classList.remove('open'); 
+    setTimeout(() => { 
+        leaderOverlay.classList.remove('active'); 
+        overlay.classList.remove('active'); // Убираем общий оверлей
+        togglePause(false); // Снимаем паузу
+    }, 300);
 };
 document.getElementById('set-volume').addEventListener('input', (e) => {
     const v = parseFloat(e.target.value || '1');
@@ -200,7 +213,6 @@ function resize() {
     const rect = document.getElementById('game-container').getBoundingClientRect();
     const dpr = window.devicePixelRatio || 1;
     
-    // Используем стабильные размеры вьюпорта если доступны
     if (tg.viewportStableHeight && tg.viewportStableWidth) {
         W = Math.round(tg.viewportStableWidth);
         H = Math.round(tg.viewportStableHeight);
@@ -247,25 +259,19 @@ function switchTrack(to) {
         audio.menu.pause(); 
         audio.game.currentTime = 0; 
         audio.game.play().catch(()=>{}); 
-        
-        // Скрываем элементы управления в игровом режиме
-        document.getElementById('open-ui').style.display = 'none';
-        document.getElementById('open-leader').style.display = 'none';
+        document.getElementById('open-ui').style.display = 'flex'; // Оставляем доступ к паузе
+        document.getElementById('open-leader').style.display = 'none'; // Лидерборд скрываем во время игры
     }
     else if(to === 'menu') { 
         audio.game.pause(); 
         audio.menu.currentTime = 0; 
         audio.menu.play().catch(()=>{}); 
-        
-        // Показываем элементы управления в меню
         document.getElementById('open-ui').style.display = 'flex';
         document.getElementById('open-leader').style.display = 'flex';
     }
     else { 
         audio.menu.pause(); 
         audio.game.pause(); 
-        
-        // Показываем элементы управления при остановке
         document.getElementById('open-ui').style.display = 'flex';
         document.getElementById('open-leader').style.display = 'flex';
     }
@@ -284,13 +290,10 @@ c.onpointerdown = e => {
         if(touchY > H * 0.75) {
             state = "PLAYING"; reset(); switchTrack('game');
             document.documentElement.requestFullscreen?.();
-
-            // Скрываем элементы управления в игровом режиме
-            document.getElementById('open-ui').style.display = 'none';
-            document.getElementById('open-leader').style.display = 'none';
+            document.getElementById('open-leader').style.display = 'none'; // Скрыть лидерборд
         }
     } else if (state === "PLAYING") {
-        if(p.rocket <= 0) bullets.push({ x: p.x, y: p.y - 40 });
+        if(!isPaused && p.rocket <= 0) bullets.push({ x: p.x, y: p.y - 40 });
     } else if (state === "GAMEOVER") {
         if(touchY > H/2 - 50 && touchY < H/2 + 50) { state = "PLAYING"; reset(); switchTrack('game'); }
         else if(touchY > H/2 + 60) { state = "MENU"; switchTrack('menu'); }
@@ -301,14 +304,11 @@ window.onpointermove = e => {
     e.preventDefault();
     const rect = c.getBoundingClientRect();
     input.currX = ((e.touches ? e.touches[0].clientX : e.clientX) - rect.left) / rect.width * W;
-    
 };
 
 window.onpointerup = e => {
     e.preventDefault();
     c.releasePointerCapture?.(e.pointerId);
-    
-    
     if(state === "MENU") {
         const dist = input.currX - input.startX;
         if(Math.abs(dist) > 60) {
@@ -317,18 +317,47 @@ window.onpointerup = e => {
         }
     }
 };
-window.onpointercancel = () => {
-    input.currX = p.x;
-    
-};
+window.onpointercancel = () => { input.currX = p.x; };
+
+// Helper to draw image or fallback rect
+function drawSafeImage(key, x, y, w, h, fallbackColor) {
+    let img = imgs[key];
+    if(img && img.complete && img.naturalWidth !== 0) {
+        ctx.drawImage(img, x, y, w, h);
+    } else {
+        ctx.fillStyle = fallbackColor || "#f0f";
+        ctx.fillRect(x, y, w, h);
+    }
+}
 
 function loop() {
     requestAnimationFrame(loop);
-    if(loadedCount < 8) return;
-    ctx.drawImage(imgs["bg.jpg"], 0, 0, W, H);
+    if(loadedCount < 8) {
+         // Fallback: start anyway after timeout or checks, but here we wait
+         // With our onError handler, loadedCount will increase anyway
+    }
+
+    // DRAW BACKGROUND
+    drawSafeImage("bg.jpg", 0, 0, W, H, "#eee");
+
+    // PAUSE LOGIC
+    if(state === "PLAYING" && isPaused) {
+        // Отрисовка застывшего кадра (персонаж, платформы)
+        drawGameObjects(); 
+        // Затемнение
+        ctx.fillStyle = "rgba(0,0,0,0.3)";
+        ctx.fillRect(0,0,W,H);
+        ctx.fillStyle = "#fff";
+        ctx.textAlign = "center";
+        ctx.font = "bold 30px sans-serif";
+        ctx.fillText("ПАУЗА", W/2, H/2);
+        return; // Skip physics
+    }
 
     if(state === "PLAYING") {
         if(!tg.isExpanded) tg.expand();
+        
+        // PHYSICS
         let diff = 1 + (score / 3000);
         let speedKmh = 40 + (score / 70) * 0.25;
         let targetVX = (input.currX - p.x) * 0.2;
@@ -382,42 +411,7 @@ function loop() {
             switchTrack('stop'); 
         }
 
-        // DRAW
-        plats.forEach(pl => {
-            if(!pl.active) return;
-            ctx.fillStyle = pl.type === 1 ? "#FFD700" : (pl.type === 2 ? "#ff1a1a" : "#fff");
-            ctx.beginPath(); ctx.roundRect(pl.x, pl.y, pl.w, pl.h, 8); ctx.fill();
-            ctx.strokeStyle = "#000"; ctx.lineWidth = 2; ctx.stroke();
-            if(pl.spring) { ctx.fillStyle="#000"; ctx.fillRect(pl.x+pl.w/2-8, pl.y-6, 16, 6); }
-        });
-        boosters.forEach(b => { 
-            ctx.save(); ctx.translate(b.x, b.y); ctx.rotate(Math.sin(Date.now()*0.01)*0.2);
-            let img = imgs["burn.webp"], w = 20, h = w * (img.height/img.width);
-            ctx.drawImage(img, -w/2, -h/2, w, h); ctx.restore();
-        });
-        enemies.forEach(e => { let d = Math.sin(Date.now()*0.003 + e.t)*45; 
-            ctx.save();
-            ctx.translate(e.x + d, e.y);
-            ctx.rotate(e.ang);
-            let img = imgs["hot.webp"], w = 35, h = w * (img.height/img.width);
-            ctx.drawImage(img, -w/2, -h/2, w, h);
-            ctx.restore();
-        });
-        bullets.forEach(b => {
-            let img = imgs["igla.webp"], w = 25, h = w * (img.height/img.width);
-            ctx.drawImage(img, b.x-w/2, b.y-h/2, w, h);
-        });
-        
-        particles.forEach((pr, i) => {
-            pr.x += pr.vx; pr.y += pr.vy; pr.vy += 0.2; pr.life--;
-            ctx.fillStyle = `rgba(255, 100, 50, ${pr.life/30})`; 
-            ctx.beginPath(); ctx.arc(pr.x, pr.y, 3, 0, Math.PI*2); ctx.fill();
-            if(pr.life <= 0) particles.splice(i, 1);
-        });
-        
-        let charImg = imgs[files[charIdx]], cw = 30, ch = cw * (charImg.height/charImg.width);
-        ctx.save(); ctx.translate(p.x, p.y); ctx.rotate(p.ang); if(p.dir === -1) ctx.scale(-1, 1);
-        ctx.drawImage(charImg, -cw/2, -ch/2, cw, ch); ctx.restore();
+        drawGameObjects();
 
         // HUD
         ctx.fillStyle = "rgba(0,0,0,0.8)"; ctx.fillRect(0,0,W,50);
@@ -432,8 +426,14 @@ function loop() {
         ctx.font="600 20px sans-serif"; ctx.fillText("JUMP", W/2, 130);
         ctx.font="14px sans-serif"; ctx.fillText("Свайп для выбора персонажа", W/2, 160);
 
-        let charImg = imgs[files[charIdx]], cw = 80, ch = cw * (charImg.height/charImg.width);
-        ctx.drawImage(charImg, W/2-cw/2, H/2-ch/2 + Math.sin(Date.now()*0.002)*15, cw, ch);
+        let img = imgs[files[charIdx]];
+        if(img && img.complete && img.naturalWidth !== 0) {
+            let cw = 80, ch = cw * (img.height/img.width);
+            ctx.drawImage(img, W/2-cw/2, H/2-ch/2 + Math.sin(Date.now()*0.002)*15, cw, ch);
+        } else {
+            // Fallback char
+             ctx.fillStyle = "cyan"; ctx.fillRect(W/2-40, H/2-40 + Math.sin(Date.now()*0.002)*15, 80, 80);
+        }
 
         ctx.fillStyle = "#ff1a1a"; ctx.beginPath(); ctx.roundRect(W/2-100, H-120, 200, 60, 20); ctx.fill();
         ctx.fillStyle = "#fff"; ctx.font="bold 22px sans-serif"; ctx.fillText("ИГРАТЬ", W/2, H-82);
@@ -448,6 +448,54 @@ function loop() {
         ctx.fillStyle = "#fff"; ctx.fillText("В МЕНЮ", W/2, H/2+106);
     }
 }
+
+// Вынесена отрисовка объектов, чтобы можно было рисовать и на паузе
+function drawGameObjects() {
+    plats.forEach(pl => {
+        if(!pl.active) return;
+        ctx.fillStyle = pl.type === 1 ? "#FFD700" : (pl.type === 2 ? "#ff1a1a" : "#fff");
+        ctx.beginPath(); ctx.roundRect(pl.x, pl.y, pl.w, pl.h, 8); ctx.fill();
+        ctx.strokeStyle = "#000"; ctx.lineWidth = 2; ctx.stroke();
+        if(pl.spring) { ctx.fillStyle="#000"; ctx.fillRect(pl.x+pl.w/2-8, pl.y-6, 16, 6); }
+    });
+    
+    boosters.forEach(b => { 
+        ctx.save(); ctx.translate(b.x, b.y); ctx.rotate(Math.sin(Date.now()*0.01)*0.2);
+        drawSafeImage("burn.webp", -10, -10, 20, 20, "orange"); // approximate aspect
+        ctx.restore();
+    });
+    
+    enemies.forEach(e => { let d = Math.sin(Date.now()*0.003 + e.t)*45; 
+        ctx.save();
+        ctx.translate(e.x + d, e.y);
+        ctx.rotate(e.ang);
+        drawSafeImage("hot.webp", -17.5, -17.5, 35, 35, "red");
+        ctx.restore();
+    });
+    
+    bullets.forEach(b => {
+        drawSafeImage("igla.webp", b.x-12.5, b.y-12.5, 25, 25, "yellow");
+    });
+    
+    particles.forEach((pr, i) => {
+        pr.x += pr.vx; pr.y += pr.vy; pr.vy += 0.2; pr.life--;
+        ctx.fillStyle = `rgba(255, 100, 50, ${pr.life/30})`; 
+        ctx.beginPath(); ctx.arc(pr.x, pr.y, 3, 0, Math.PI*2); ctx.fill();
+        if(pr.life <= 0) particles.splice(i, 1);
+    });
+    
+    let charImg = imgs[files[charIdx]];
+    ctx.save(); ctx.translate(p.x, p.y); ctx.rotate(p.ang); if(p.dir === -1) ctx.scale(-1, 1);
+    
+    if(charImg && charImg.complete && charImg.naturalWidth !== 0) {
+        let cw = 30, ch = cw * (charImg.height/charImg.width);
+        ctx.drawImage(charImg, -cw/2, -ch/2, cw, ch); 
+    } else {
+        ctx.fillStyle = "#0f0"; ctx.fillRect(-15, -15, 30, 30); // fallback char
+    }
+    ctx.restore();
+}
+
 loop();
 if(settings.music) audio.menu.play().catch(()=>{});
 </script>
