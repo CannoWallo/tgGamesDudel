@@ -58,6 +58,75 @@
         
         .leader-row { display: flex; justify-content: space-between; padding: 12px; border-bottom: 1px solid #eee; }
         .leader-row.me { color: var(--red); font-weight: 800; }
+        
+        /* Адаптивный дизайн для разных размеров экрана */
+        @media screen and (max-width: 768px) {
+            .settings-btn, .rating-btn {
+                width: 45px;
+                height: 45px;
+                font-size: 20px;
+                bottom: 15px;
+            }
+            
+            .btn-main {
+                padding: 16px;
+                font-size: 16px;
+            }
+            
+            .ui-item {
+                padding: 12px;
+                margin-bottom: 8px;
+            }
+            
+            .bottom-sheet {
+                padding: 15px;
+            }
+        }
+        
+        @media screen and (max-width: 480px) {
+            .settings-btn, .rating-btn {
+                width: 40px;
+                height: 40px;
+                font-size: 18px;
+                bottom: 10px;
+            }
+            
+            .btn-main {
+                padding: 14px;
+                font-size: 15px;
+            }
+            
+            .ui-item {
+                padding: 10px;
+            }
+            
+            .icon {
+                width: 28px;
+                height: 28px;
+                font-size: 14px;
+            }
+        }
+        
+        /* Для больших экранов (ПК) */
+        @media screen and (min-width: 1024px) {
+            #game-container {
+                max-width: 800px;
+                max-height: 600px;
+                box-shadow: 0 0 20px rgba(0,0,0,0.3);
+                border-radius: 10px;
+            }
+            
+            .settings-btn, .rating-btn {
+                width: 60px;
+                height: 60px;
+                font-size: 28px;
+            }
+            
+            .btn-main {
+                padding: 20px;
+                font-size: 20px;
+            }
+        }
     </style>
 </head>
 <body>
@@ -98,12 +167,27 @@
 
 <script>
 const tg = window.Telegram.WebApp;
+
+// Проверяем, что приложение запущено внутри Telegram Web App
+if (!tg.initData) {
+    // Если приложение открыто не в Telegram, показываем сообщение
+    document.body.innerHTML = '<div style="display:flex;justify-content:center;align-items:center;height:100vh;background:#111;color:white;font-family:sans-serif;"><p>Пожалуйста, откройте это приложение в Telegram</p></div>';
+    throw new Error('Приложение должно запускаться в Telegram Web App');
+}
+
+// Дополнительно проверяем, что мы внутри Telegram Web App
+if (!window.Telegram?.WebApp?.initData) {
+    document.body.innerHTML = '<div style="display:flex;justify-content:center;align-items:center;height:100vh;background:#111;color:white;font-family:sans-serif;"><p>Пожалуйста, откройте это приложение в Telegram</p></div>';
+    throw new Error('Приложение должно запускаться в Telegram Web App');
+}
+
 tg.ready?.();
 try {
     tg.requestFullscreen?.();
     tg.lockOrientation?.();
     tg.addToHomeScreen?.();
 } catch (e) {}
+
 tg.expand();
 tg.disableVerticalSwipes?.();
 // tg.enableClosingConfirmation?.(); // Отключено, чтобы приложение закрывалось сразу
@@ -121,6 +205,18 @@ document.addEventListener('keydown', (e) => {
     }
 });
 
+// Обработка изменения ориентации экрана
+window.addEventListener('orientationchange', () => {
+    // Небольшая задержка для корректного получения новых размеров
+    setTimeout(resize, 100);
+});
+
+// Обработка изменения размера окна
+window.addEventListener('resize', () => {
+    // Небольшая задержка для стабильности
+    setTimeout(resize, 50);
+});
+
 // Настройка полноэкранного режима
 if (tg.viewportStableHeight) {
     // Используем стабильную высоту вьюпорта для лучшей производительности
@@ -132,11 +228,30 @@ if (tg.viewportStableHeight) {
 
 const c = document.getElementById('c'), ctx = c.getContext('2d');
 let W = 0, H = 0;
-let gravity = 0.55, jumpPower = -14, springPower = -28, rocketPower = -22;
+// Базовые игровые параметры
+let baseGravity = 0.55, baseJumpPower = -14, baseSpringPower = -28, baseRocketPower = -22;
+
+// Адаптированные игровые параметры
+let gravity = baseGravity, jumpPower = baseJumpPower, springPower = baseSpringPower, rocketPower = baseRocketPower;
 
 let state = "MENU", score = 0, high = localStorage.getItem('biicla_high') || 0, charIdx = 0;
 let settings = JSON.parse(localStorage.getItem('biicla_settings')) || { music: true, vibration: true, volume: 1 };
 if(typeof settings.volume !== 'number') settings.volume = 1;
+
+// Функция для адаптации игровых параметров под размер экрана
+function adaptGameParameters() {
+    // Базовый размер экрана для которого настроены параметры
+    const baseScreenWidth = 400;
+    
+    // Вычисляем коэффициент масштабирования
+    const scale = Math.max(W / baseScreenWidth, 0.8); // Минимальный масштаб 0.8
+    
+    // Адаптируем параметры
+    gravity = baseGravity;
+    jumpPower = baseJumpPower * scale;
+    springPower = baseSpringPower * scale;
+    rocketPower = baseRocketPower * scale;
+}
 
 const imgs = {}, files = ["liza.webp", "nika.webp", "tvorch.webp", "egor.webp", "bg.jpg", "burn.webp", "igla.webp", "hot.webp"];
 let loadedCount = 0;
@@ -220,6 +335,10 @@ function resize() {
         H = Math.round(rect.height);
     }
     
+    // Ограничиваем минимальный размер для корректной работы на маленьких экранах
+    W = Math.max(W, 320);
+    H = Math.max(H, 480);
+    
     c.width = Math.round(W * dpr); 
     c.height = Math.round(H * dpr);
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
@@ -228,30 +347,161 @@ function resize() {
         p.x = W/2; 
         p.y = H-150; 
     }
+    
+    // Адаптируем размеры элементов интерфейса при изменении размера экрана
+    adjustUIElements();
+    
+    // Адаптируем игровые параметры под новый размер экрана
+    adaptGameParameters();
 }
-window.addEventListener('resize', resize);
 // Заменим вызов на нашу улучшенную функцию
 tg.onEvent?.('viewportChanged', () => {
     setTimeout(resize, 100);
 });
 resize();
 
+// Адаптируем игровые параметры под размер экрана
+adaptGameParameters();
+
+// Функция для адаптации элементов интерфейса под размер экрана
+function adjustUIElements() {
+    // Адаптируем размеры кнопок в зависимости от размера экрана
+    const settingsBtn = document.querySelector('.settings-btn');
+    const ratingBtn = document.querySelector('.rating-btn');
+    
+    if (W <= 480) {
+        // Для маленьких экранов
+        if (settingsBtn) {
+            settingsBtn.style.width = '40px';
+            settingsBtn.style.height = '40px';
+            settingsBtn.style.fontSize = '18px';
+            settingsBtn.style.bottom = '10px';
+            settingsBtn.style.right = '10px';
+        }
+        if (ratingBtn) {
+            ratingBtn.style.width = '40px';
+            ratingBtn.style.height = '40px';
+            ratingBtn.style.fontSize = '18px';
+            ratingBtn.style.bottom = '10px';
+            ratingBtn.style.left = '10px';
+        }
+    } else if (W <= 768) {
+        // Для планшетов
+        if (settingsBtn) {
+            settingsBtn.style.width = '45px';
+            settingsBtn.style.height = '45px';
+            settingsBtn.style.fontSize = '20px';
+            settingsBtn.style.bottom = '15px';
+            settingsBtn.style.right = '15px';
+        }
+        if (ratingBtn) {
+            ratingBtn.style.width = '45px';
+            ratingBtn.style.height = '45px';
+            ratingBtn.style.fontSize = '20px';
+            ratingBtn.style.bottom = '15px';
+            ratingBtn.style.left = '15px';
+        }
+    } else {
+        // Для больших экранов
+        if (settingsBtn) {
+            settingsBtn.style.width = '50px';
+            settingsBtn.style.height = '50px';
+            settingsBtn.style.fontSize = '24px';
+            settingsBtn.style.bottom = '20px';
+            settingsBtn.style.right = '20px';
+        }
+        if (ratingBtn) {
+            ratingBtn.style.width = '50px';
+            ratingBtn.style.height = '50px';
+            ratingBtn.style.fontSize = '24px';
+            ratingBtn.style.bottom = '20px';
+            ratingBtn.style.left = '20px';
+        }
+    }
+}
+
 function spawn(y) {
     let r = Math.random(), type = r > 0.9 ? 2 : (r > 0.8 ? 1 : 0);
-    let pl = { x: Math.random()*(W-80)+10, y: y, w: 75, h: 18, type: type, active: true, sp: 2, scored: false };
+    
+    // Адаптируем размеры платформ под ширину экрана
+    const platformWidth = Math.min(75, W * 0.2); // Максимум 20% ширины экрана
+    const platformMinX = 10;
+    const platformMaxX = W - platformMinX - platformWidth;
+    const platformX = Math.random() * (platformMaxX - platformMinX) + platformMinX;
+    
+    let pl = { 
+        x: platformX, 
+        y: y, 
+        w: platformWidth, 
+        h: 18, 
+        type: type, 
+        active: true, 
+        sp: 2, 
+        scored: false 
+    };
+    
     if(type === 0) {
         if(Math.random() > 0.93) pl.spring = true;
-        else if(Math.random() > 0.97) boosters.push({ x: pl.x+37, y: y-25 });
+        else if(Math.random() > 0.97) {
+            // Адаптируем позицию бустера под размер платформы
+            boosters.push({ x: pl.x + pl.w/2, y: y-25 });
+        }
     }
     plats.push(pl);
-    if(Math.random() > 0.97) enemies.push({ x: Math.random()*(W-40)+20, y: y-50, t: Math.random()*5, ang: 0, angVel: 0 });
+    
+    // Адаптируем размеры врагов под ширину экрана
+    const enemySize = Math.min(40, W * 0.1); // Размер врага не больше 10% ширины экрана
+    const enemyMinX = enemySize/2;
+    const enemyMaxX = W - enemySize/2;
+    const enemyX = Math.random() * (enemyMaxX - enemyMinX) + enemyMinX;
+    
+    if(Math.random() > 0.97) {
+        enemies.push({ 
+            x: enemyX, 
+            y: y-50, 
+            t: Math.random()*5, 
+            ang: 0, 
+            angVel: 0 
+        });
+    }
 }
 
 function reset() {
-    p.x = W/2; p.y = H-150; p.vx = 0; p.vy = 0; p.rocket = 0;
-    score = 0; plats = []; enemies = []; bullets = []; boosters = []; particles = [];
-    plats.push({x: W/2-50, y: H-50, w: 100, h:20, type: 0, active:true, scored: true});
-    for(let i=1; i<12; i++) spawn(H - i*75);
+    // Адаптируем начальные позиции под размер экрана
+    p.x = W/2; 
+    p.y = H - Math.min(150, H * 0.2); // Позиция игрока не ближе чем 20% от нижнего края
+    p.vx = 0; 
+    p.vy = 0; 
+    p.rocket = 0;
+    
+    score = 0; 
+    plats = []; 
+    enemies = []; 
+    bullets = []; 
+    boosters = []; 
+    particles = [];
+    
+    // Адаптируем размеры стартовой платформы
+    const platformWidth = Math.min(100, W * 0.25); // Максимум 25% ширины экрана
+    const platformX = W/2 - platformWidth/2;
+    const platformY = H - Math.min(50, H * 0.1); // Платформа не выше 10% от высоты экрана
+    
+    plats.push({
+        x: platformX, 
+        y: platformY, 
+        w: platformWidth, 
+        h: 20, 
+        type: 0, 
+        active: true, 
+        scored: true
+    });
+    
+    // Адаптируем расстояние между платформами под размер экрана
+    const platformSpacing = Math.min(75, H * 0.15); // Расстояние не больше 15% высоты экрана
+    
+    for(let i=1; i<12; i++) {
+        spawn(H - i * platformSpacing);
+    }
 }
 
 function switchTrack(to) {
@@ -294,7 +544,11 @@ c.onpointerdown = e => {
     c.setPointerCapture?.(e.pointerId);
 
     if(state === "MENU") {
-        if(touchY > H * 0.75) {
+        // Адаптируем область нажатия кнопки "ИГРАТЬ" под размер экрана
+        // Кнопка "ИГРАТЬ" находится в нижней части экрана
+        const playButtonAreaTop = H - Math.min(120, H * 0.15); // Верхняя граница кнопки
+        
+        if(touchY > playButtonAreaTop) {
             state = "PLAYING"; reset(); switchTrack('game');
             document.documentElement.requestFullscreen?.();
 
@@ -308,8 +562,17 @@ c.onpointerdown = e => {
         volumeAdjustmentActive = true;
         if(p.rocket <= 0) bullets.push({ x: p.x, y: p.y - 40 });
     } else if (state === "GAMEOVER") {
-        if(touchY > H/2 - 50 && touchY < H/2 + 50) { state = "PLAYING"; reset(); switchTrack('game'); }
-        else if(touchY > H/2 + 60) { state = "MENU"; switchTrack('menu'); }
+        // Адаптируем области нажатия под размер экрана
+        const retryButtonTop = H/2 - Math.min(55, H * 0.07)/2; // Центр кнопки "ЕЩЕ РАЗ"
+        const retryButtonBottom = H/2 + Math.min(55, H * 0.07)/2;
+        const menuButtonTop = H/2 + Math.min(55, H * 0.07)/2 + Math.min(65, H * 0.08); // Верх кнопки "В МЕНЮ"
+        
+        if(touchY > retryButtonTop && touchY < retryButtonBottom) { 
+            state = "PLAYING"; reset(); switchTrack('game'); 
+        }
+        else if(touchY > menuButtonTop) { 
+            state = "MENU"; switchTrack('menu'); 
+        }
     }
 };
 
@@ -322,17 +585,18 @@ window.onpointermove = e => {
     if(state === "PLAYING" && volumeAdjustmentActive) {
         const deltaX = input.currX - input.startX;
         // Масштабируем изменение громкости: движение влево - тише, вправо - громче
-        const volumeChange = (deltaX / W) * 0.5; // Максимальное изменение ±50%
+        // Используем половину ширины экрана как максимальное расстояние для полного изменения громкости
+        const volumeChange = (deltaX / (W / 2)) * 0.5; // Максимальное изменение ±50%
         let newVolume = initialVolume + volumeChange;
-        
+
         // Ограничиваем значение громкости от 0 до 1
         newVolume = Math.max(0, Math.min(1, newVolume));
-        
+
         // Применяем новую громкость
         settings.volume = newVolume;
         audio.menu.volume = audio.game.volume = volScale(newVolume);
         audio.menu.muted = audio.game.muted = (newVolume === 0 || !settings.music);
-        
+
         // Обновляем значение слайдера громкости в настройках
         document.getElementById('set-volume').value = newVolume;
     }
@@ -352,7 +616,9 @@ window.onpointerup = e => {
     
     if(state === "MENU") {
         const dist = input.currX - input.startX;
-        if(Math.abs(dist) > 60) {
+        // Адаптируем порог срабатывания свайпа под размер экрана
+        const swipeThreshold = Math.min(60, W * 0.15); // 15% ширины экрана
+        if(Math.abs(dist) > swipeThreshold) {
             charIdx = (charIdx + (dist > 0 ? -1 : 1) + 4) % 4;
             if(settings.vibration) tg.HapticFeedback.selectionChanged();
         }
@@ -379,7 +645,9 @@ function loop() {
         if(!tg.isExpanded) tg.expand();
         let diff = 1 + (score / 3000);
         let speedKmh = 40 + (score / 70) * 0.25;
-        let targetVX = (input.currX - p.x) * 0.2;
+        // Адаптируем чувствительность управления под размер экрана
+        const controlSensitivity = 0.2 * (W / 400); // Базовая чувствительность для ширины 400px
+        let targetVX = (input.currX - p.x) * controlSensitivity;
         p.vx += (targetVX - p.vx) * 0.25; p.x += p.vx;
         if(p.vx > 0.5) p.dir = 1; else if(p.vx < -0.5) p.dir = -1;
         if(p.x > W) p.x = 0; else if(p.x < 0) p.x = W;
@@ -388,44 +656,118 @@ function loop() {
         else { p.vy += gravity * diff; p.ang *= 0.92; p.ang += (p.vx * 0.04 - p.ang) * 0.12; }
         p.y += p.vy;
 
-        let shift = 0; if(p.y < H * 0.45) { shift = H * 0.45 - p.y; p.y = H * 0.45; }
+        // Адаптируем точку, после которой камера следует за игроком
+        const cameraThreshold = H * 0.45;
+        let shift = 0; 
+        if(p.y < cameraThreshold) { 
+            shift = cameraThreshold - p.y; 
+            p.y = cameraThreshold; 
+        }
 
         plats.forEach(pl => {
             pl.y += shift;
-            if(pl.type === 1) { pl.x += pl.sp; if(pl.x < 0 || pl.x > W-pl.w) pl.sp *= -1; }
-            if(!pl.scored && p.y < pl.y) { score += 10; pl.scored = true; }
-            if(p.vy > 0 && pl.active && p.x+20 > pl.x && p.x-20 < pl.x+pl.w && p.y+40 > pl.y && p.y+40 < pl.y+pl.h) {
+            if(pl.type === 1) { 
+                pl.x += pl.sp; 
+                if(pl.x < 0 || pl.x > W-pl.w) pl.sp *= -1; 
+            }
+            if(!pl.scored && p.y < pl.y) { 
+                score += 10; 
+                pl.scored = true; 
+            }
+            // Адаптируем коллизии под размер экрана
+            const collisionOffsetX = Math.min(20, W * 0.05); // 5% ширины экрана, но не менее 20px
+            const collisionOffsetY = Math.min(40, H * 0.08); // 8% высоты экрана, но не менее 40px
+            
+            if(p.vy > 0 && pl.active && 
+               p.x + collisionOffsetX > pl.x && 
+               p.x - collisionOffsetX < pl.x + pl.w && 
+               p.y + collisionOffsetY > pl.y && 
+               p.y + collisionOffsetY < pl.y + pl.h) {
                 p.vy = pl.spring ? springPower : jumpPower;
                 if(pl.type === 2) pl.active = false;
                 if(settings.vibration) tg.HapticFeedback.impactOccurred('medium');
             }
         });
 
-        boosters.forEach((b, i) => { b.y += shift; if(Math.hypot(p.x - b.x, p.y - b.y) < 35) { p.rocket = 70; boosters.splice(i, 1); }});
-        bullets.forEach((b, i) => { b.y -= 14; if(b.y < -50) bullets.splice(i, 1); });
+        // Адаптируем радиус сбора бустеров под размер экрана
+        const boosterRadius = Math.min(35, Math.max(20, W * 0.08)); // 8% ширины экрана
+        boosters.forEach((b, i) => { 
+            b.y += shift; 
+            if(Math.hypot(p.x - b.x, p.y - b.y) < boosterRadius) { 
+                p.rocket = 70; 
+                boosters.splice(i, 1); 
+            }
+        });
+        
+        // Адаптируем скорость пуль под размер экрана
+        const bulletSpeed = Math.min(14, Math.max(8, W * 0.035)); // Пропорционально ширине экрана
+        bullets.forEach((b, i) => { 
+            b.y -= bulletSpeed; 
+            if(b.y < -50) bullets.splice(i, 1); 
+        });
+        
         enemies.forEach((e, i) => {
-            e.y += shift; let drift = Math.sin(Date.now()*0.003 + e.t) * 45;
+            e.y += shift; 
+            // Адаптируем амплитуду движения врагов под размер экрана
+            const driftAmplitude = Math.min(45, W * 0.1); // 10% ширины экрана
+            let drift = Math.sin(Date.now()*0.003 + e.t) * driftAmplitude;
             e.angVel += (Math.random() - 0.5) * 0.02;
             e.angVel *= 0.95;
             e.ang += e.angVel;
-            if(p.rocket <= 0 && Math.hypot(p.x - (e.x + drift), p.y - e.y) < 35) { 
-                state = "GAMEOVER"; 
+            
+            // Адаптируем радиус столкновения с врагом
+            const enemyCollisionRadius = Math.min(35, Math.max(20, W * 0.08)); // 8% ширины экрана
+            if(p.rocket <= 0 && Math.hypot(p.x - (e.x + drift), p.y - e.y) < enemyCollisionRadius) {
+                state = "GAMEOVER";
                 switchTrack('stop');
-                if(settings.vibration) tg.HapticFeedback.impactOccurred('heavy'); 
+                if(settings.vibration) tg.HapticFeedback.impactOccurred('heavy');
             }
-            bullets.forEach((bu, bi) => { 
-                if(Math.hypot(bu.x - (e.x + drift), bu.y - e.y) < 40) { 
-                    for(let j=0; j<12; j++) particles.push({ x: e.x + drift, y: e.y, vx: (Math.random()-0.5)*6, vy: (Math.random()-0.5)*6-2, life: 30 });
-                    enemies.splice(i, 1); bullets.splice(bi, 1); score += 100;
+            
+            bullets.forEach((bu, bi) => {
+                // Адаптируем радиус столкновения пули с врагом
+                const bulletHitRadius = Math.min(40, Math.max(25, W * 0.1)); // 10% ширины экрана
+                if(Math.hypot(bu.x - (e.x + drift), bu.y - e.y) < bulletHitRadius) {
+                    // Адаптируем количество частиц под размер экрана
+                    const particleCount = Math.min(12, Math.max(6, Math.floor(W * 0.015)));
+                    for(let j=0; j<particleCount; j++) {
+                        // Адаптируем параметры частиц
+                        const particleSpeed = Math.min(6, Math.max(3, W * 0.007));
+                        particles.push({ 
+                            x: e.x + drift, 
+                            y: e.y, 
+                            vx: (Math.random()-0.5)*particleSpeed, 
+                            vy: (Math.random()-0.5)*particleSpeed-2, 
+                            life: 30 
+                        });
+                    }
+                    enemies.splice(i, 1); 
+                    bullets.splice(bi, 1); 
+                    score += 100;
                     if(settings.vibration) tg.HapticFeedback.impactOccurred('heavy');
                 }
             });
         });
 
-        if(score > high) { high = score; localStorage.setItem('biicla_high', high); }
-        while(plats.length < 15) spawn(Math.min(...plats.map(o=>o.y)) - 80);
-        plats = plats.filter(pl => pl.y < H + 100);
-        if(p.y > H + 100) { 
+        if(score > high) { 
+            high = score; 
+            localStorage.setItem('biicla_high', high); 
+        }
+        
+        // Адаптируем количество платформ под размер экрана
+        const platformThreshold = Math.min(15, Math.max(10, Math.floor(H * 0.025))); // Примерно 2.5% высоты экрана
+        while(plats.length < platformThreshold) {
+            // Адаптируем расстояние между новыми платформами
+            const spacing = Math.min(80, H * 0.15); // 15% высоты экрана
+            spawn(Math.min(...plats.map(o=>o.y)) - spacing);
+        }
+        
+        // Адаптируем границу исчезновения платформ
+        const platformRemoveThreshold = Math.min(100, H * 0.2); // 20% высоты экрана
+        plats = plats.filter(pl => pl.y < H + platformRemoveThreshold);
+        
+        // Адаптируем границу проигрыша
+        const gameOverThreshold = Math.min(100, H * 0.2); // 20% высоты экрана
+        if(p.y > H + gameOverThreshold) { 
             state = "GAMEOVER"; 
             switchTrack('stop'); 
         }
@@ -468,32 +810,114 @@ function loop() {
         ctx.drawImage(charImg, -cw/2, -ch/2, cw, ch); ctx.restore();
 
         // HUD
-        ctx.fillStyle = "rgba(0,0,0,0.8)"; ctx.fillRect(0,0,W,50);
-        ctx.strokeStyle = "#ff1a1a"; ctx.lineWidth = 2; ctx.strokeRect(2, 2, W-4, 46);
-        ctx.fillStyle = "#ff1a1a"; ctx.font = "bold 20px sans-serif"; ctx.textAlign="left"; ctx.fillText("SCORE: " + score, 12, 30);
-        ctx.textAlign="right"; ctx.fillText("HIGH: " + high, W-12, 30);
-        ctx.font = "14px sans-serif"; ctx.fillStyle = "#fff"; ctx.textAlign="center"; ctx.fillText("SPEED: " + speedKmh.toFixed(1) + " км/ч", W/2, 35);
+        // Адаптируем размеры HUD под размер экрана
+        const hudHeight = Math.min(50, H * 0.08); // Максимум 8% высоты экрана
+        const hudPadding = Math.min(12, W * 0.03); // Отступы пропорциональны ширине
+        
+        ctx.fillStyle = "rgba(0,0,0,0.8)"; 
+        ctx.fillRect(0, 0, W, hudHeight);
+        
+        ctx.strokeStyle = "#ff1a1a"; 
+        ctx.lineWidth = 2; 
+        ctx.strokeRect(2, 2, W-4, hudHeight-4);
+        
+        // Адаптируем размер шрифта под размер экрана
+        const fontSize = Math.min(20, Math.max(12, W * 0.04)); // Пропорционально ширине экрана
+        const smallFontSize = Math.min(14, Math.max(10, W * 0.03));
+        
+        ctx.fillStyle = "#ff1a1a"; 
+        ctx.font = `bold ${fontSize}px sans-serif`; 
+        ctx.textAlign = "left"; 
+        ctx.fillText("SCORE: " + score, hudPadding, hudHeight * 0.6);
+        
+        ctx.textAlign = "right"; 
+        ctx.fillText("HIGH: " + high, W - hudPadding, hudHeight * 0.6);
+        
+        ctx.font = `${smallFontSize}px sans-serif`; 
+        ctx.fillStyle = "#fff"; 
+        ctx.textAlign = "center"; 
+        ctx.fillText("SPEED: " + speedKmh.toFixed(1) + " км/ч", W/2, hudHeight * 0.7);
     } 
     else if(state === "MENU") {
-        ctx.fillStyle = "rgba(0,0,0,0.4)"; ctx.fillRect(0,0,W,H);
-        ctx.fillStyle = "#fff"; ctx.textAlign="center"; ctx.font="800 42px sans-serif"; ctx.fillText("OTSHITIE", W/2, 100);
-        ctx.font="600 20px sans-serif"; ctx.fillText("JUMP", W/2, 130);
-        ctx.font="14px sans-serif"; ctx.fillText("Свайп для выбора персонажа", W/2, 160);
+        ctx.fillStyle = "rgba(0,0,0,0.4)"; 
+        ctx.fillRect(0,0,W,H);
         
-        let charImg = imgs[files[charIdx]], cw = 80, ch = cw * (charImg.height/charImg.width);
-        ctx.drawImage(charImg, W/2-cw/2, H/2-ch/2 + Math.sin(Date.now()*0.002)*15, cw, ch);
+        // Адаптируем размеры текста в меню
+        const titleFontSize = Math.min(42, Math.max(24, W * 0.06)); // Пропорционально ширине экрана
+        const subtitleFontSize = Math.min(20, Math.max(14, W * 0.04));
+        const instructionFontSize = Math.min(14, Math.max(10, W * 0.03));
         
-        ctx.fillStyle = "#ff1a1a"; ctx.beginPath(); ctx.roundRect(W/2-100, H-120, 200, 60, 20); ctx.fill();
-        ctx.fillStyle = "#fff"; ctx.font="bold 22px sans-serif"; ctx.fillText("ИГРАТЬ", W/2, H-82);
+        ctx.fillStyle = "#fff"; 
+        ctx.textAlign = "center"; 
+        ctx.font = `800 ${titleFontSize}px sans-serif`; 
+        ctx.fillText("OTSHITIE", W/2, H * 0.15);
+        
+        ctx.font = `600 ${subtitleFontSize}px sans-serif`; 
+        ctx.fillText("JUMP", W/2, H * 0.22);
+        
+        ctx.font = `${instructionFontSize}px sans-serif`; 
+        ctx.fillText("Свайп для выбора персонажа", W/2, H * 0.28);
+
+        // Адаптируем размер персонажа под размер экрана
+        let charImg = imgs[files[charIdx]];
+        const charSize = Math.min(80, Math.max(40, W * 0.15)); // 15% ширины экрана
+        const ch = charSize * (charImg.height/charImg.width);
+        ctx.drawImage(charImg, W/2-charSize/2, H/2-ch/2 + Math.sin(Date.now()*0.002)*15, charSize, ch);
+
+        // Адаптируем размер кнопки "ИГРАТЬ"
+        const buttonWidth = Math.min(200, Math.max(100, W * 0.4)); // 40% ширины экрана
+        const buttonHeight = Math.min(60, Math.max(30, H * 0.08)); // 8% высоты экрана
+        const buttonY = H - Math.min(120, H * 0.15); // 15% от нижнего края
+        const buttonTextY = buttonY + buttonHeight * 0.35; // 35% высоты кнопки
+        
+        ctx.fillStyle = "#ff1a1a"; 
+        ctx.beginPath(); 
+        ctx.roundRect(W/2-buttonWidth/2, buttonY, buttonWidth, buttonHeight, 20); 
+        ctx.fill();
+        
+        const playButtonFontSize = Math.min(22, Math.max(16, W * 0.05));
+        ctx.fillStyle = "#fff"; 
+        ctx.font = `bold ${playButtonFontSize}px sans-serif`; 
+        ctx.fillText("ИГРАТЬ", W/2, buttonTextY);
     }
     else if(state === "GAMEOVER") {
-        ctx.fillStyle = "rgba(0,0,0,0.85)"; ctx.fillRect(0,0,W,H);
-        ctx.fillStyle = "#fff"; ctx.textAlign="center"; ctx.font = "bold 48px sans-serif"; ctx.fillText("FAIL", W/2, H/2 - 80);
-        ctx.font = "24px sans-serif"; ctx.fillText("СЧЕТ: " + score, W/2, H/2 - 30);
-        ctx.fillStyle = "#fff"; ctx.beginPath(); ctx.roundRect(W/2-90, H/2+10, 180, 55, 15); ctx.fill();
-        ctx.fillStyle = "#000"; ctx.font = "bold 20px sans-serif"; ctx.fillText("ЕЩЕ РАЗ", W/2, H/2+45);
-        ctx.fillStyle = "rgba(255,255,255,0.2)"; ctx.beginPath(); ctx.roundRect(W/2-90, H/2+75, 180, 50, 15); ctx.fill();
-        ctx.fillStyle = "#fff"; ctx.fillText("В МЕНЮ", W/2, H/2+106);
+        ctx.fillStyle = "rgba(0,0,0,0.85)"; 
+        ctx.fillRect(0,0,W,H);
+        
+        // Адаптируем размеры текста в состоянии GAMEOVER
+        const failFontSize = Math.min(48, Math.max(30, W * 0.08));
+        const scoreFontSize = Math.min(24, Math.max(16, W * 0.05));
+        const buttonFontSize = Math.min(20, Math.max(14, W * 0.04));
+        
+        ctx.fillStyle = "#fff"; 
+        ctx.textAlign = "center"; 
+        ctx.font = `bold ${failFontSize}px sans-serif`; 
+        ctx.fillText("FAIL", W/2, H/2 - H * 0.15);
+        
+        ctx.font = `${scoreFontSize}px sans-serif`; 
+        ctx.fillText("СЧЕТ: " + score, W/2, H/2 - H * 0.08);
+        
+        // Адаптируем размеры кнопок
+        const buttonWidth = Math.min(180, Math.max(100, W * 0.35));
+        const retryButtonHeight = Math.min(55, Math.max(40, H * 0.07));
+        const menuButtonHeight = Math.min(50, Math.max(35, H * 0.06));
+        
+        ctx.fillStyle = "#fff"; 
+        ctx.beginPath(); 
+        ctx.roundRect(W/2-buttonWidth/2, H/2+H*0.02, buttonWidth, retryButtonHeight, 15); 
+        ctx.fill();
+        
+        ctx.fillStyle = "#000"; 
+        ctx.font = `bold ${buttonFontSize}px sans-serif`; 
+        ctx.fillText("ЕЩЕ РАЗ", W/2, H/2+retryButtonHeight * 0.65);
+        
+        ctx.fillStyle = "rgba(255,255,255,0.2)"; 
+        ctx.beginPath(); 
+        ctx.roundRect(W/2-buttonWidth/2, H/2+H*0.12, buttonWidth, menuButtonHeight, 15); 
+        ctx.fill();
+        
+        ctx.fillStyle = "#fff"; 
+        ctx.fillText("В МЕНЮ", W/2, H/2+H*0.12+menuButtonHeight * 0.65);
     }
 }
 loop();
