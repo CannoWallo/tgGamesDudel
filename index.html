@@ -81,61 +81,74 @@
 </div>
 
 <script>
-// Создаем фиктивный объект Telegram WebApp для работы вне Telegram
-const tg = window.Telegram?.WebApp || {
-    initData: 'fake_init_data',
-    initDataUnsafe: { user: { first_name: 'Tester' }},
-    version: '6.0',
-    platform: 'unknown',
-    colorScheme: 'light',
-    themeParams: {},
-    isExpanded: true,
-    viewportStableHeight: 0,
-    viewportHeight: 0,
-    headerColor: '',
-    backgroundColor: '',
-    BackButton: { isVisible: false },
-    MainButton: { isVisible: false },
-    SettingsButton: { isVisible: false },
-    HapticFeedback: {
-        impactOccurred: () => {},
-        notificationOccurred: () => {},
-        selectionChanged: () => {}
-    },
-    ready: () => {},
-    expand: () => {},
-    close: () => {},
-    onEvent: (event, callback) => {},
-    offEvent: (event, callback) => {},
-    enableClosingConfirmation: () => {},
-    disableClosingConfirmation: () => {},
-    requestFullscreen: () => {},
-    lockOrientation: () => {},
-    addToHomeScreen: () => {},
-    disableVerticalSwipes: () => {},
-    setHeaderColor: (color) => {},
-    setBackgroundColor: (color) => {}
-};
+// Ждем полной загрузки DOM
+document.addEventListener('DOMContentLoaded', function() {
+    // Создаем фиктивный объект Telegram WebApp для работы вне Telegram
+    const tg = window.Telegram?.WebApp || {
+        initData: 'fake_init_data',
+        initDataUnsafe: { user: { first_name: 'Tester' }},
+        version: '6.0',
+        platform: 'unknown',
+        colorScheme: 'light',
+        themeParams: {},
+        isExpanded: true,
+        viewportStableHeight: 0,
+        viewportHeight: 0,
+        headerColor: '',
+        backgroundColor: '',
+        BackButton: { isVisible: false },
+        MainButton: { isVisible: false },
+        SettingsButton: { isVisible: false },
+        HapticFeedback: {
+            impactOccurred: () => {},
+            notificationOccurred: () => {},
+            selectionChanged: () => {}
+        },
+        ready: () => {},
+        expand: () => {},
+        close: () => {},
+        onEvent: (event, callback) => {},
+        offEvent: (event, callback) => {},
+        enableClosingConfirmation: () => {},
+        disableClosingConfirmation: () => {},
+        requestFullscreen: () => {},
+        lockOrientation: () => {},
+        addToHomeScreen: () => {},
+        disableVerticalSwipes: () => {},
+        setHeaderColor: (color) => {},
+        setBackgroundColor: (color) => {}
+    };
 
-let isPaused = false; // Состояние паузы
+    let isPaused = false; // Состояние паузы
 
-// Основная логика приложения
-tg.ready?.();
-try {
-    tg.requestFullscreen?.();
-    tg.lockOrientation?.();
-    tg.addToHomeScreen?.();
-} catch (e) {}
+    // Основная логика приложения
+    tg.ready?.();
+    try {
+        tg.requestFullscreen?.();
+        tg.lockOrientation?.();
+        tg.addToHomeScreen?.();
+    } catch (e) {}
 
-tg.expand();
-tg.disableVerticalSwipes?.();
-tg.setHeaderColor?.('bg_color');
+    tg.expand();
+    tg.disableVerticalSwipes?.();
+    tg.setHeaderColor?.('bg_color');
 
-tg.onEvent?.('back_button_pressed', () => tg.close?.());
-document.addEventListener('keydown', (e) => { if (e.key === 'Escape') tg.close?.(); });
-tg.onEvent?.('viewportChanged', resize);
+    tg.onEvent?.('back_button_pressed', () => tg.close?.());
+    document.addEventListener('keydown', (e) => { if (e.key === 'Escape') tg.close?.(); });
+    tg.onEvent?.('viewportChanged', resize);
 
-const c = document.getElementById('c'), ctx = c.getContext('2d');
+    const c = document.getElementById('c');
+    if (!c) {
+        console.error('Canvas element not found');
+        return;
+    }
+    
+    const ctx = c.getContext('2d');
+    if (!ctx) {
+        console.error('Canvas context not available');
+        return;
+    }
+    
     let W = 0, H = 0;
     let gravity = 0.55, jumpPower = -14, springPower = -28, rocketPower = -22;
 
@@ -573,6 +586,14 @@ const c = document.getElementById('c'), ctx = c.getContext('2d');
     loop();
     if(settings.music) audio.menu.play().catch(()=>{});
 }
+
+// Закрываем функцию DOMContentLoaded
+});
+
+// Добавляем обработчик ошибок для отладки
+window.addEventListener('error', function(e) {
+    console.error('Ошибка в приложении:', e.error);
+});
 </script>
 </body>
 </html>
