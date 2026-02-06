@@ -414,7 +414,7 @@
             ctx.strokeStyle = "#ff1a1a"; ctx.lineWidth = 2; ctx.strokeRect(2, 2, W-4, 46);
             ctx.fillStyle = "#ff1a1a"; ctx.font = "bold 20px sans-serif"; ctx.textAlign="left"; ctx.fillText("SCORE: " + score, 12, 25);
             ctx.textAlign="right"; ctx.fillText("HIGH: " + high, W-12, 25);
-            ctx.font = "14px sans-serif"; ctx.fillStyle = "#fff"; ctx.textAlign="center"; ctx.fillText("SPEED: " + speedKmh.toFixed(1) + " км/ч", W/2, 25);
+            ctx.font = "14px sans-serif"; ctx.fillStyle = "#fff"; ctx.textAlign="center"; ctx.fillText;
         } 
         else if(state === "MENU") {
             ctx.fillStyle = "rgba(0,0,0,0.4)"; ctx.fillRect(0,0,W,H);
@@ -457,7 +457,7 @@
         
         boosters.forEach(b => { 
             ctx.save(); ctx.translate(b.x, b.y); ctx.rotate(Math.sin(Date.now()*0.01)*0.2);
-            drawSafeImage("burn.webp", -10, -10, 20, 20, "orange"); // approximate aspect
+            drawSafeImage("burn.webp", -10, -10, 15, 15, "orange"); // approximate aspect
             ctx.restore();
         });
         
@@ -497,3 +497,4 @@
     </script>
     </body>
     </html>
+
