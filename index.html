@@ -8,7 +8,6 @@
         <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
         <title>Biicla Jump: Ultimate</title>
         <script src="https://telegram.org/js/telegram-web-app.js"></script>
-        <link rel="manifest" href="/manifest.json">
         <style>
             :root { --red: #ff1a1a; --bg-card: rgba(255, 255, 255, 0.98); --gray: #f2f2f7; }
             body { margin: 0; padding: 0; background: #111; overflow: hidden; touch-action: none; overscroll-behavior: none; font-family: -apple-system, system-ui, sans-serif; user-select: none; -webkit-user-select: none; display: flex; justify-content: center; align-items: center; height: 100vh; }
@@ -93,9 +92,7 @@
     } else {
         tg.ready?.();
         try {
-            tg.requestFullscreen?.();
             tg.lockOrientation?.();
-            tg.addToHomeScreen?.();
         } catch (e) {}
 
         tg.expand();
@@ -289,7 +286,6 @@
         if(state === "MENU") {
             if(touchY > H * 0.75) {
                 state = "PLAYING"; reset(); switchTrack('game');
-                document.documentElement.requestFullscreen?.();
                 document.getElementById('open-leader').style.display = 'none'; // Скрыть лидерборд
             }
         } else if (state === "PLAYING") {
