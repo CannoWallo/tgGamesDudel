@@ -254,7 +254,7 @@
         enemies.forEach(e => { 
             let d = Math.sin(Date.now()*0.003 + e.t)*45; 
             ctx.save(); ctx.translate(e.x + d, e.y); ctx.rotate(e.ang);
-            drawSafeImage("hot.webp", -20, -20, 40, 40, "red");
+            drawSafeImage("hot.webp", -20, -20, 45, 65, "red");
             ctx.restore();
         });
         
@@ -363,3 +363,4 @@
 </script>
 </body>
 </html>
+
